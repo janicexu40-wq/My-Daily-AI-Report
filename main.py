@@ -26,25 +26,18 @@ except ImportError:
 DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
 BARK_KEY = os.getenv('BARK_KEY')
 
-# RSS 新闻源（你可以在这里添加更多源）
 RSS_SOURCES = [
- # --- 1. 深度调查与方法论 ---
-    "https://rsshub.rssforever.com/infzm/2",              # 南方周末 (使用镜像 rssforever)
-    "https://rsshub.rssforever.com/woshipm/popular/daily", # 人人都是产品经理 (使用镜像)
-    "https://www.huxiu.com/rss/0.xml",                    # 虎嗅 (换回官方源，更稳定！)
-
-    # --- 2. 金融核心与搞钱风向 ---
-    "https://rsshub.rssforever.com/wallstreetcn/live/global/2", # 华尔街见闻-快讯
-    "https://rsshub.rssforever.com/cls/telegraph/red",          # 财联社-加红
-    "https://rsshub.rssforever.com/wallstreetcn/hot/day",       # 华尔街见闻-热文
-
-    # --- 3. 宏观政策与官方定调 ---
-    "https://rsshub.rssforever.com/thepaper/channel/25950",     # 澎湃-时事
-
-    # --- 4. 行业动态与市场情绪 ---
-    "https://36kr.com/feed",                                    # 36Kr (换回官方源，极其稳定)
-    "https://rsshub.rssforever.com/thepaper/channel/25951",     # 澎湃-财经
+    "https://rsshub.rssforever.com/infzm/2",              # 南方周末
+    "https://rsshub.rssforever.com/woshipm/popular/daily", # 人人都是产品经理
+    "https://www.huxiu.com/rss/0.xml",                    # 虎嗅 (官方源)
+    "https://rsshub.rssforever.com/wallstreetcn/live/global/2", # 华尔街见闻
+    "https://rsshub.rssforever.com/cls/telegraph/red",          # 财联社
+    "https://rsshub.rssforever.com/wallstreetcn/hot/day",       # 华尔街热文
+    "https://rsshub.rssforever.com/thepaper/channel/25950",     # 澎湃时事
+    "https://36kr.com/feed",                                    # 36Kr (官方源)
+    "https://rsshub.rssforever.com/thepaper/channel/25951",     # 澎湃财经
     "https://rsshub.rssforever.com/xueqiu/hots",                # 雪球热帖
+]
 ]
 
 # 输出目录配置
@@ -85,8 +78,7 @@ def fetch_rss_articles() -> List[Dict]:
     
     for source_url in RSS_SOURCES:
        try:
-            # 给爬虫加个伪装头 (User-Agent)
-            feed = feedparser.parse(
+           feed = feedparser.parse(
                 source_url,
                 agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             )
