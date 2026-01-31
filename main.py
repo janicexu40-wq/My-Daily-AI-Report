@@ -115,10 +115,9 @@ def fetch_rss_articles() -> List[Dict]:
     return articles[:40]  # 最多保留40条
 
 
-def call_qwen_max(prompt: str, max_tokens: int = 4000) -> str:
+def _call_dashscope(model: str, prompt: str, max_tokens: int, temperature: float, extra_params: dict = None) -> str:
     """
-    调用阿里云 Qwen-Max 模型
-    使用 OpenAI 兼容接口
+    底层 DashScope API 调用封装（所有模型共用）
     """
     if not DASHSCOPE_API_KEY:
         raise ValueError("未配置 DASHSCOPE_API_KEY")
@@ -130,7 +129,7 @@ def call_qwen_max(prompt: str, max_tokens: int = 4000) -> str:
     }
     
     payload = {
-        'model': 'qwen-max',  # 使用最新的 Qwen-2.5-Max
+        'model': model,
         'messages': [
             {
                 'role': 'system',
@@ -142,17 +141,69 @@ def call_qwen_max(prompt: str, max_tokens: int = 4000) -> str:
             }
         ],
         'max_tokens': max_tokens,
-        'temperature': 0.7
+        'temperature': temperature
     }
     
+    # 合并额外参数（如 enable_thinking）
+    if extra_params:
+        payload.update(extra_params)
+    
+    # Thinking 模式耗时更长，非 thinking 模式 60s 够用
+    timeout = 300 if extra_params and extra_params.get('enable_thinking') else 60
+    
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
         response.raise_for_status()
         result = response.json()
-        return result['choices'][0]['message']['content']
-    except Exception as e:
-        print(f"❌ Qwen API 调用失败: {e}")
+        
+        choice = result['choices'][0]['message']
+        
+        # 如果是 thinking 模式，打印推理过程长度
+        if 'reasoning_content' in choice and choice['reasoning_content']:
+            print(f"    💭 推理过程: {len(choice['reasoning_content'])}字")
+        
+        return choice['content']
+    except requests.exceptions.Timeout:
+        print(f"❌ API 调用超时（模型: {model}）")
         raise
+    except Exception as e:
+        print(f"❌ API 调用失败（模型: {model}）: {e}")
+        raise
+
+
+def call_qwen_flash(prompt: str, max_tokens: int = 1000) -> str:
+    """
+    轻量级任务专用 → qwen3-flash
+    场景：选题筛选、简单分类、快速摘要
+    特点：极快响应，费用最低（¥0.1/百万输入，¥0.4/百万输出）
+    """
+    print(f"  ⚡ 调用 qwen3-flash（轻量级任务）...")
+    return _call_dashscope(
+        model='qwen3-flash',
+        prompt=prompt,
+        max_tokens=max_tokens,
+        temperature=0.7
+    )
+
+
+def call_qwen_max_thinking(prompt: str, max_tokens: int = 4000) -> str:
+    """
+    核心深度分析专用 → qwen3-max + thinking
+    场景：板块A/B 的投研级深度撰写
+    特点：深度推理，质量最高（¥2.5/百万输入，¥10/百万输出）
+    """
+    thinking_budget = min(max_tokens * 2, 16000)
+    print(f"  🧠 调用 qwen3-max-thinking（深度分析，思考预算: {thinking_budget} tokens）...")
+    return _call_dashscope(
+        model='qwen3-max',
+        prompt=prompt,
+        max_tokens=max_tokens + thinking_budget,
+        temperature=0.6,
+        extra_params={
+            'enable_thinking': True,
+            'thinking_budget': thinking_budget
+        }
+    )
 
 
 def generate_section_a_overview(articles: List[Dict]) -> str:
@@ -199,7 +250,7 @@ def generate_section_a_overview(articles: List[Dict]) -> str:
 请直接输出正文内容，不要包含任何标题或"板块A"等字样。
 """
     
-    return call_qwen_max(prompt, max_tokens=3000)
+    return call_qwen_max_thinking(prompt, max_tokens=3000)
 
 
 def generate_section_b_deep_dive(articles: List[Dict]) -> str:
@@ -228,7 +279,7 @@ def generate_section_b_deep_dive(articles: List[Dict]) -> str:
 3. ...
 """
     
-    selected_topics = call_qwen_max(selection_prompt, max_tokens=500)
+    selected_topics = call_qwen_flash(selection_prompt, max_tokens=500)
     print(f"  已选出话题:\n{selected_topics}\n")
     
     # 第二步：对每个话题进行深度分析
@@ -268,7 +319,7 @@ def generate_section_b_deep_dive(articles: List[Dict]) -> str:
 直接输出分析正文，每个话题用"---"分隔，不要加标题前缀。
 """
     
-    return call_qwen_max(analysis_prompt, max_tokens=6000)
+    return call_qwen_max_thinking(analysis_prompt, max_tokens=6000)
 
 
 def assemble_full_script(section_a: str, section_b: str) -> str:
