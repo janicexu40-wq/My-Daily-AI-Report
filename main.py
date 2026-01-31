@@ -28,23 +28,23 @@ BARK_KEY = os.getenv('BARK_KEY')
 
 # RSS 新闻源（你可以在这里添加更多源）
 RSS_SOURCES = [
-   # --- 1. 深度调查与方法论 (核心干货) ---
-    "https://rsshub.app/infzm/2",                     # 【社会深度】南方周末-新闻
-    "https://rsshub.app/woshipm/popular/daily",       # 【行业内功】人人都是产品经理-日榜
-    "https://rsshub.app/huxiu/channel/103",           # 【商业深度】虎嗅-商业消费
+ # --- 1. 深度调查与方法论 ---
+    "https://rsshub.rssforever.com/infzm/2",              # 南方周末 (使用镜像 rssforever)
+    "https://rsshub.rssforever.com/woshipm/popular/daily", # 人人都是产品经理 (使用镜像)
+    "https://www.huxiu.com/rss/0.xml",                    # 虎嗅 (换回官方源，更稳定！)
 
-    # --- 2. 金融核心与搞钱风向 (速度优先) ---
-    "https://rsshub.app/wallstreetcn/live/global/2",  # 【全球视野】华尔街见闻-重要快讯 (Score=2)
-    "https://rsshub.app/cls/telegraph/red",           # 【A股风向】财联社-加红电报
-    "https://rsshub.app/wallstreetcn/hot/day",        # 【每日热文】华尔街见闻-日榜
+    # --- 2. 金融核心与搞钱风向 ---
+    "https://rsshub.rssforever.com/wallstreetcn/live/global/2", # 华尔街见闻-快讯
+    "https://rsshub.rssforever.com/cls/telegraph/red",          # 财联社-加红
+    "https://rsshub.rssforever.com/wallstreetcn/hot/day",       # 华尔街见闻-热文
 
-    # --- 3. 宏观政策与官方定调 (保留澎湃作为政策窗口) ---
-    "https://rsshub.app/thepaper/channel/25950",      # 【时事政策】澎湃-时事
+    # --- 3. 宏观政策与官方定调 ---
+    "https://rsshub.rssforever.com/thepaper/channel/25950",     # 澎湃-时事
 
-    # --- 4. 行业动态与市场情绪 (补充信息) ---
-    "https://rsshub.app/36kr/newsflashes",            # 【创投快讯】36Kr
-    "https://rsshub.app/thepaper/channel/25951",      # 【财经资讯】澎湃-财经
-    "https://rsshub.app/xueqiu/hots",                 # 【散户情绪】雪球热帖
+    # --- 4. 行业动态与市场情绪 ---
+    "https://36kr.com/feed",                                    # 36Kr (换回官方源，极其稳定)
+    "https://rsshub.rssforever.com/thepaper/channel/25951",     # 澎湃-财经
+    "https://rsshub.rssforever.com/xueqiu/hots",                # 雪球热帖
 ]
 
 # 输出目录配置
@@ -84,8 +84,12 @@ def fetch_rss_articles() -> List[Dict]:
     print(f"📰 开始从 {len(RSS_SOURCES)} 个源抓取新闻...")
     
     for source_url in RSS_SOURCES:
-        try:
-            feed = feedparser.parse(source_url)
+       try:
+            # 给爬虫加个伪装头 (User-Agent)
+            feed = feedparser.parse(
+                source_url,
+                agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            )
             source_name = feed.feed.get('title', source_url)
             
             for entry in feed.entries[:15]:  # 每个源取前15条
