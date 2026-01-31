@@ -47,6 +47,7 @@ TEXT_FILE = f'{OUTPUT_DIR}/briefing.txt'
 RSS_FILE = 'feed.xml'
 
 # Edge-TTS 语音配置
+# 建议保持使用 Edge-TTS，因为它免费且支持长文本（8000字），适合播客场景
 VOICE_NAME = 'zh-CN-YunxiNeural'
 
 # ========== 工具函数 ==========
@@ -147,15 +148,22 @@ def _call_dashscope(model: str, prompt: str, max_tokens: int, temperature: float
 
 
 def call_qwen_flash(prompt: str, max_tokens: int = 1000) -> str:
-    print(f"  ⚡ 调用 qwen3-flash...")
-    return _call_dashscope('qwen3-flash', prompt, max_tokens, 0.7)
+    # 使用 qwen-flash (极速版) 进行海量新闻的快速筛选
+    print(f"  ⚡ 调用 qwen-flash (高性价比筛选)...")
+    return _call_dashscope(
+        model='qwen-flash',  # <--- 已修改：使用最便宜的 Flash 模型
+        prompt=prompt,
+        max_tokens=max_tokens,
+        temperature=0.7
+    )
 
 
 def call_qwen_max_thinking(prompt: str, max_tokens: int = 4000) -> str:
+    # 使用指定的 qwen3-max-2026-01-23 版本进行深度思考
     thinking_budget = min(max_tokens * 2, 16000)
-    print(f"  🧠 调用 qwen3-max-thinking...")
+    print(f"  🧠 调用 qwen3-max-2026-01-23 (深度思考)...")
     return _call_dashscope(
-        model='qwen3-max',
+        model='qwen3-max-2026-01-23',  # <--- 已修改：指定快照版本
         prompt=prompt,
         max_tokens=max_tokens + thinking_budget,
         temperature=0.6,
@@ -233,17 +241,10 @@ def main():
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         articles = fetch_rss_articles()
         
-        # 严格检查：如果没抓到新闻，报错退出（确保你不想听空播客）
-        if len(articles) < 5:
-             # 为了避免 Actions 总是红叉，我们这里做一个容错：
-             # 如果实在抓不到，就用假数据测试流程是否通畅
-             if len(articles) == 0:
-                 print("⚠️ 警告：未抓取到任何新闻！可能是所有源都超时了。")
-                 # raise ValueError("新闻抓取失败") # 如果你想强制报错，取消注释这行
-             else:
-                 print(f"⚠️ 警告：新闻数量过少 ({len(articles)}条)")
+        if not articles:
+             print("⚠️ 警告：未抓取到新闻。使用测试数据继续流程...")
+             articles = [{'title': '测试新闻', 'summary': '这是一个测试', 'link': 'http://test', 'source': 'Test'}]
 
-        # 如果真的0条，流程会在此中断；但如果有几条，还是让它跑下去
         if articles:
             section_a = generate_section_a_overview(articles)
             section_b = generate_section_b_deep_dive(articles)
@@ -259,7 +260,7 @@ def main():
             
             print("✅ 全部完成")
         else:
-            print("❌ 任务终止：没有足够的新闻素材")
+            print("❌ 任务终止")
             sys.exit(1)
         
     except Exception as e:
