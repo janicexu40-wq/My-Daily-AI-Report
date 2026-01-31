@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>私人晨间情报</title>
+    <item>
+      <title>2026-01-31 晨间情报</title>
+      <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing.mp3" type="audio/mpeg" length="100000"/>
+      <guid>2026-01-31</guid>
+    </item>
+  </channel>
+</rss>
