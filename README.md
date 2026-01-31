@@ -85,7 +85,7 @@ feed.xml            # RSS 订阅源
 
 ## ⚙️ 技术架构
 
-- **AI 模型**：阿里云 Qwen3-Max-Thinking
+- **AI 模型**：阿里云 Qwen-Max
 - **语音合成**：Microsoft Edge-TTS
 - **自动化**：GitHub Actions（每日定时运行）
 - **新闻源**：36氪、虎嗅、澎湃、财新、界面新闻等
