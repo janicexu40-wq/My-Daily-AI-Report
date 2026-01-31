@@ -26,6 +26,7 @@ except ImportError:
 DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
 BARK_KEY = os.getenv('BARK_KEY')
 
+# RSS 新闻源 (已替换为更稳定的镜像源)
 RSS_SOURCES = [
     "https://rsshub.rssforever.com/infzm/2",              # 南方周末
     "https://rsshub.rssforever.com/woshipm/popular/daily", # 人人都是产品经理
@@ -37,7 +38,6 @@ RSS_SOURCES = [
     "https://36kr.com/feed",                                    # 36Kr (官方源)
     "https://rsshub.rssforever.com/thepaper/channel/25951",     # 澎湃财经
     "https://rsshub.rssforever.com/xueqiu/hots",                # 雪球热帖
-]
 ]
 
 # 输出目录配置
