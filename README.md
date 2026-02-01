@@ -48,3 +48,38 @@
 ### 方式三：播客订阅 (RSS) 🎙️
 *适合使用小宇宙、Apple Podcast 的泛用型播客用户。*
 **复制以下 RSS 地址添加订阅**：
+https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/feed.xml
+---
+
+## 🗞️ 核心情报源
+
+本项目采用混合信源策略：
+
+- **第一梯队 (金融核心)**：华尔街见闻 (Live)、财联社 (电报)
+- **第二梯队 (权威定调)**：新华社、第一财经、澎湃新闻
+- **第三梯队 (深度/科技)**：虎嗅、36氪、少数派 (sspai)、人人都是产品经理
+- **第四梯队 (研报)**：东方财富策略研报、南方周末
+
+---
+
+## 🔧 高级配置
+
+### 调整运行时间
+编辑 `.github/workflows/daily.yml`：
+```yaml
+- cron: '0 23 * * *'  # 对应北京时间早上 7:00
+更换声音
+编辑 main.py 中的 VOICE_NAME：
+
+zh-CN-YunxiNeural (默认，稳重男声)
+
+zh-CN-XiaoxiaoNeural (活力女声)
+
+📂 输出文件结构
+Plaintext
+output/
+├── briefing_20260201.mp3   # 🎙️ 音频 (上传至阿里云盘)
+├── briefing_20260201.html  # 📱 网页 (Bark 跳转)
+├── briefing_20260201.md    # 📝 原稿
+feed.xml                    # 📡 RSS
+免责声明：本项目生成的投资分析仅供参考，AI 可能会产生幻觉，不构成任何投资建议。
