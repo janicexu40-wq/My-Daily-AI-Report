@@ -181,7 +181,7 @@ def call_qwen_max_thinking(prompt: str, max_tokens: int = 4000) -> str:
     thinking_budget = min(max_tokens * 2, 16000)
     print(f"  🧠 调用qwen-max (深度思考)...")
     return _call_dashscope(
-        model='qwen3-max-2026-01-23',
+        model='qwen-max',
         prompt=prompt,
         max_tokens=max_tokens + thinking_budget,
         temperature=0.6,
