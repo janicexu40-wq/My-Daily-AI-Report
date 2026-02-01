@@ -159,9 +159,9 @@ def call_qwen_flash(prompt: str, max_tokens: int = 1000) -> str:
 
 
 def call_qwen_max_thinking(prompt: str, max_tokens: int = 4000) -> str:
-    # 使用指定的 qwen3-max-2026-01-23 版本进行深度思考
+    # 使用指定的qwen-max 版本进行深度思考
     thinking_budget = min(max_tokens * 2, 16000)
-    print(f"  🧠 调用 qwen3-max-2026-01-23 (深度思考)...")
+    print(f"  🧠 调用qwen-max (深度思考)...")
     return _call_dashscope(
         model='qwen3-max-2026-01-23',  # <--- 已修改：指定快照版本
         prompt=prompt,
