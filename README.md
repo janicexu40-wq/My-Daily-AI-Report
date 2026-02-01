@@ -62,11 +62,6 @@ https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/feed.xml
 
 ---
 
-## 🔧 高级配置
-
-### 调整运行时间
-编辑 `.github/workflows/daily.yml`：
-```yaml
 - cron: '0 23 * * *'  # 对应北京时间早上 7:00
 更换声音
 编辑 main.py 中的 VOICE_NAME：
