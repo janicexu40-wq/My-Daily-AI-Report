@@ -42,7 +42,7 @@ jobs:
     - name: ☁️ 上传到阿里云盘
       env:
         ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
-        AUDIO_FILE: output/briefing_$(date +%Y%m%d).mp3
+        AUDIO_FILE: output/briefing_*.mp3
       run: |
         echo "准备上传到阿里云盘..."
         python upload_to_aliyunpan.py
