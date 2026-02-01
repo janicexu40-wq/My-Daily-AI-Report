@@ -2,14 +2,14 @@ name: Daily AI Morning Briefing
 
 on:
   schedule:
-    # 每天北京时间早上7点运行（UTC时间23点前一天）
+    # 每天北京时间早上7点运行（UTC时间前一天23点）
     - cron: '0 23 * * *'
   
-  # 允许手动触发（用于测试）
+  # 允许手动触发测试
   workflow_dispatch:
 
 jobs:
-  generate-briefing:
+  generate-and-upload:
     runs-on: ubuntu-latest
     
     permissions:
@@ -23,40 +23,103 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
         
     - name: 📦 安装依赖
       run: |
         python -m pip install --upgrade pip
-        pip install feedparser requests edge-tts
+        pip install --break-system-packages feedparser requests edge-tts aligo
         
-    - name: 🤖 运行 AI 情报生成器
+    - name: 🤖 生成晨间情报
       env:
         DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         BARK_KEY: ${{ secrets.BARK_KEY }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
+        echo "开始生成晨间情报..."
         python main.py
+        echo "情报生成完成"
         
-    - name: 📤 提交生成的文件
+    - name: ☁️ 上传到阿里云盘
+      env:
+        ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
+        AUDIO_FILE: output/briefing_$(date +%Y%m%d).mp3
+      run: |
+        echo "准备上传到阿里云盘..."
+        python upload_to_aliyunpan.py
+        
+    - name: 🧹 清理旧文件（只保留最近3天）
+      run: |
+        echo "开始清理旧文件..."
+        # 删除3天前的音频文件
+        find output/ -name "*.mp3" -type f -mtime +3 -delete 2>/dev/null || true
+        # 删除3天前的文本文件
+        find output/ -name "*.txt" -type f -mtime +3 -delete 2>/dev/null || true
+        echo "✅ 已清理超过3天的本地文件"
+        # 显示当前保留的文件
+        echo "当前保留的文件:"
+        ls -lh output/ 2>/dev/null || echo "output 文件夹为空"
+        
+    - name: 📤 提交生成的文件到 GitHub
       run: |
         git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
         git add output/ feed.xml
+        # 如果有变更才提交
         git diff --quiet && git diff --staged --quiet || git commit -m "🔄 更新晨间情报 $(date +'%Y-%m-%d %H:%M')"
         git push
       
-    - name: 📊 输出运行统计
+    - name: 📊 生成运行统计报告
       if: always()
       run: |
         echo "### 📈 运行统计" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        if [ -f output/briefing.txt ]; then
-          WORD_COUNT=$(wc -m < output/briefing.txt)
+        
+        # 获取今天的日期
+        TODAY=$(date +%Y%m%d)
+        TEXT_FILE="output/briefing_${TODAY}.txt"
+        AUDIO_FILE="output/briefing_${TODAY}.mp3"
+        
+        # 文稿统计
+        if [ -f "$TEXT_FILE" ]; then
+          WORD_COUNT=$(wc -m < "$TEXT_FILE")
           echo "- 📝 文稿字数: $WORD_COUNT 字" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ⚠️ 文稿文件未生成" >> $GITHUB_STEP_SUMMARY
         fi
-        if [ -f output/briefing.mp3 ]; then
-          FILE_SIZE=$(du -h output/briefing.mp3 | cut -f1)
+        
+        # 音频统计
+        if [ -f "$AUDIO_FILE" ]; then
+          FILE_SIZE=$(du -h "$AUDIO_FILE" | cut -f1)
           echo "- 🎙️ 音频大小: $FILE_SIZE" >> $GITHUB_STEP_SUMMARY
+          
+          # 尝试获取音频时长（如果有ffprobe）
+          if command -v ffprobe &> /dev/null; then
+            DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$AUDIO_FILE" 2>/dev/null || echo "未知")
+            if [ "$DURATION" != "未知" ]; then
+              MINUTES=$(echo "$DURATION/60" | bc)
+              echo "- ⏱️ 音频时长: 约 $MINUTES 分钟" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+        else
+          echo "- ⚠️ 音频文件未生成" >> $GITHUB_STEP_SUMMARY
         fi
+        
+        # 云盘上传状态
+        echo "- ☁️ 云盘路径: /晨间情报/briefing_${TODAY}.mp3" >> $GITHUB_STEP_SUMMARY
+        
+        # 完成时间
         echo "- ⏰ 完成时间: $(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
+        
+        # RSS 订阅地址
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 订阅信息" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "阿里云盘路径: \`/晨间情报/\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # 保留文件列表
+        echo "### 📁 当前保留文件" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        ls -lh output/ 2>/dev/null || echo "无文件" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
