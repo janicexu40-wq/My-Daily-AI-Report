@@ -1,119 +1,62 @@
-# 🤖 私人晨间情报官
+# 🕵️‍♂️ 晨间猎手内参 (Morning Hunter Briefing)
 
-每天早上 7 点自动生成 40 分钟深度商业播客
+> **"这不是简单的新闻播报，这是你的私人商业情报猎手。"**
 
-## 📻 功能特点
+每天早上 7 点，自动抓取全网核心财经/科技信息，通过 AI 商业猎手视角进行深度拆解，生成 **"快讯+深度"** 的双模态情报（精美移动端网页 + 播客音频），并推送到你的手机。
 
-- 📰 **全景扫描**：全球商业科技 + 中国民生动态（中国内容占50%）
-- 🔍 **深度分析**：5-6 个话题的投研级分析（现象→本质→搞钱路径→风险预警）
-- 🎙️ **AI 语音**：Edge-TTS 自然播报，适合通勤收听
-- 📱 **推送通知**：生成完毕自动推送到 iPhone（Bark App）
-- 🎧 **播客订阅**：支持小宇宙 App 自动更新
+## ✨ 核心功能
 
-## 🎧 如何订阅
+- 📰 **全景扫描 (Flash News)**：
+    - 聚合 **新华社、华尔街见闻、财联社、第一财经** 等核心信源。
+    - 按时间轴排列的快讯流，过滤噪音，只看干货。
+- 🦁 **猎手深度拆解 (Deep Dive)**：
+    - AI 扮演"商业情报猎手"，不只复述新闻。
+    - 独家分析框架：**现状层 (The Facts) → 猎手拆解 (底层逻辑) → 搞钱路径 (行动指南)**。
+- 📱 **移动端网页体验**：
+    - 自动生成仿"微信公众号"风格的 HTML 网页。
+    - 内置音频播放器，支持边听边看。
+    - 适配手机屏幕，排版精美（红黑配色，重点加粗）。
+- 🎙️ **自然语音播报**：
+    - 使用 Edge-TTS 生成媲美真人的语音（支持 4000+ 字长文）。
+    - 智能清洗文稿中的 Markdown 符号和表情包，确保听感顺滑。
+- 🔔 **无感推送**：
+    - 任务完成后通过 **Bark** 推送到 iPhone。
+    - **点击通知直接跳转** 到当天的 HTML 情报页。
 
-在**小宇宙 App**中添加以下 RSS 地址：
-```
-https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/feed.xml
-```
+## 🚀 快速部署
 
-**订阅步骤**：
-1. 打开小宇宙 App
-2. 点击右下角 **+** 号
-3. 选择 **通过 RSS 订阅**
-4. 粘贴上面的地址
-
-## 🚀 部署状态
-
-查看最新运行状态：点击仓库顶部的 **Actions** 标签
-
-每天北京时间早上 7:00 自动运行
-
-## 🔧 自定义配置
-
-### 修改新闻源
-
-编辑 `main.py` 第 30-36 行的 `RSS_SOURCES` 列表：
-```python
-RSS_SOURCES = [
-    'https://www.36kr.com/feed',          # 36氪
-    'https://www.huxiu.com/rss/0.xml',    # 虎嗅
-    'https://www.thepaper.cn/rss_channel.jsp',  # 澎湃新闻
-    # 添加你想要的其他 RSS 源
-]
-```
-
-### 更换语音音色
-
-编辑 `main.py` 第 45 行：
-
-- **当前**：`zh-CN-YunxiNeural`（成熟男声）
-- **女声**：`zh-CN-XiaoxiaoNeural`（温柔女声）
-- **更多音色**：[查看完整列表](https://speech.microsoft.com/portal/voicegallery)
-
-### 调整运行时间
-
-编辑 `.github/workflows/daily.yml` 第 6 行：
-```yaml
-- cron: '0 23 * * *'  # 北京时间早上 7 点（UTC 23:00）
-```
-
-修改示例：
-- 早上 6 点：`'0 22 * * *'`
-- 晚上 9 点：`'0 13 * * *'`
-- 中午 12 点：`'0 4 * * *'`
-
-## 🔑 必需配置
-
-在 **Settings** → **Secrets and variables** → **Actions** 中添加：
+### 1. 配置密钥 (Secrets)
+在仓库的 **Settings** → **Secrets and variables** → **Actions** 中添加：
 
 | 密钥名称 | 说明 | 获取方式 |
 |---------|------|---------|
-| `DASHSCOPE_API_KEY` | 阿里云通义千问 API | [阿里云百炼平台](https://dashscope.console.aliyun.com/) |
-| `BARK_KEY` | iPhone 推送通知密钥 | Bark App 中查看（格式如 `xxxxxx`） |
+| `DASHSCOPE_API_KEY` | 阿里云通义千问 API (推荐 Qwen-Max) | [阿里云百炼平台](https://dashscope.console.aliyun.com/) |
+| `BARK_KEY` | iPhone 推送通知密钥 | App Store 下载 [Bark](https://apps.apple.com/us/app/bark-customed-notifications/id1403753865) |
 
-## 📊 输出文件
+### 2. 开启 GitHub Pages (🔴 关键步骤)
+为了让手机能访问生成的 HTML 网页，必须开启此功能：
+1. 进入仓库 **Settings**。
+2. 左侧栏点击 **Pages**。
+3. **Build and deployment** -> **Source** 选择 `Deploy from a branch`。
+4. **Branch** 选择 `main`，文件夹选择 `/ (root)`。
+5. 点击 **Save**。
 
-每次运行会生成以下文件：
-```
-output/
-├── briefing.mp3    # 音频文件（约 30-40 分钟）
-└── briefing.txt    # 文字稿（约 8000 字）
-
-feed.xml            # RSS 订阅源
-```
-
-## ⚙️ 技术架构
-
-- **AI 模型**：阿里云 Qwen-Max
-- **语音合成**：Microsoft Edge-TTS
-- **自动化**：GitHub Actions（每日定时运行）
-- **新闻源**：36氪、虎嗅、澎湃、财新、界面新闻等
-
-## 🐛 故障排查
-
-### Actions 运行失败
-
-1. 检查 **Settings** → **Secrets** 中的密钥是否正确
-2. 查看 **Actions** 标签页的错误日志
-3. 确认阿里云 API 额度是否充足
-
-### 小宇宙无法订阅
-
-1. 确保仓库是 **Public**（公开状态）
-2. 确认至少运行过一次，生成了 `feed.xml` 文件
-3. 等待 5-10 分钟后重试
-
-### 音频无法播放
-
-1. 检查 `output/briefing.mp3` 是否成功生成
-2. 确认 GitHub Actions 运行完成（绿色✅）
-3. 刷新小宇宙 RSS 订阅
-
-## 📝 更新日志
-
-- **2026-01-27**：初始版本发布
+### 3. 检查权限
+进入 **Settings** → **Actions** → **General**，滚动到底部 **Workflow permissions**，确保勾选：
+- ✅ Read and write permissions
 
 ---
 
-**隐私说明**：本项目仅供个人使用，所有数据存储在你的 GitHub 仓库中，不会上传到任何第三方服务器。
+## 📻 如何使用
+
+### 方式一：手机阅读 (推荐)
+1. 每天早上任务完成后，**Bark** 会弹出通知：“02月01日晨间猎手...”。
+2. **点击通知**，会自动跳转到当天的精美 HTML 网页。
+3. 网页示例地址：
+   `https://janicexu40-wq.github.io/My-Daily-AI-Report/output/briefing_20260201.html`
+   *(日期会随当天自动变动)*
+
+### 方式二：播客订阅 (RSS)
+支持在 **小宇宙**、**Apple Podcast** 等泛用型播客客户端订阅。
+
+**复制以下 RSS 地址添加订阅**：
