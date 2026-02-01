@@ -264,7 +264,7 @@ def _call_ai(prompt: str, max_tokens: int) -> str:
     url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
     headers = {'Authorization': f'Bearer {DASHSCOPE_API_KEY}', 'Content-Type': 'application/json'}
     payload = {
-        'model': 'qwen3-max-2026-01-23',
+        'model': 'qwen3-max',
         'messages': [{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': prompt}],
         'max_tokens': max_tokens + 2000,
         'temperature': 0.7,
