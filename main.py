@@ -277,7 +277,7 @@ def analyze_with_ai(news_items):
         dashscope.api_key = DASHSCOPE_API_KEY
         # 增加超时时间，防止 AI 思考太久导致连接中断
         response = dashscope.Generation.call(
-            model='qwen-max', 
+            model='qwen3-max', 
             messages=[
                 {'role': 'system', 'content': J_PROMPT},
                 {'role': 'user', 'content': f"今日情报素材池：\n{context}"}
