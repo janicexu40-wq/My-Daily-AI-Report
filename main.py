@@ -15,7 +15,13 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 import edge_tts
 import dashscope # 阿里云百炼 SDK
+from dashscope import Generation, MultiModalConversation
 from aligo import Aligo
+
+# ── 模型重试配置 ──────────────────────────────────────────
+MAX_RETRIES = 3          # 最大重试次数
+RETRY_BASE_DELAY = 2     # 指数退避基数（秒）：第1次等2s，第2次等4s
+# ─────────────────────────────────────────────────────────
 
 # ================= 0. 全局配置 =================
 logging.basicConfig(
@@ -247,58 +253,117 @@ KIMI_PROMPT = """
 """
 
 def call_qwen_structure(context):
+    """
+    Stage 1: Qwen3-Max (结构猎手)
+    负责全网 80 条新闻的初筛和 Top 15 撰写 + Deep Dive 草稿。
+    - enable_thinking=False：初筛任务不需要推理链，节省 token 和时间。
+    - 指数退避重试：最多 3 次，间隔 2/4/8 秒。
+    """
     logger.info("🧠 [Stage 1] Qwen3-Max 正在构建骨架...")
-    try:
-        dashscope.api_key = DASHSCOPE_API_KEY
-        # 阿里云最强模型
-        response = dashscope.Generation.call(
-            model='qwen3-max-2026-01-23', 
-            messages=[
-                {'role': 'system', 'content': QWEN_PROMPT},
-                {'role': 'user', 'content': f"今日情报素材池：\n{context}"}
-            ]
-        )
-        if response.status_code == HTTPStatus.OK:
-            return response.output.text
-        else:
-            logger.error(f"Qwen Error: {response.message}")
-            return None
-    except Exception as e:
-        logger.error(f"Qwen Exception: {e}")
-        return None
+    dashscope.api_key = DASHSCOPE_API_KEY
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = Generation.call(
+                model='qwen3-max',
+                messages=[
+                    {'role': 'system', 'content': QWEN_PROMPT},
+                    {'role': 'user', 'content': f"今日情报素材池：\n{context}"}
+                ],
+                extra_body={"enable_thinking": False}  # 初筛不需要思考模式，省 token
+            )
+            if response.status_code == HTTPStatus.OK:
+                logger.info("✅ [Stage 1] Qwen3-Max 输出完成")
+                return response.output.text
+            else:
+                logger.warning(f"[Stage 1] Qwen 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
+        except Exception as e:
+            logger.warning(f"[Stage 1] Qwen 异常 (attempt {attempt+1}/{MAX_RETRIES}): {e}")
+
+        if attempt < MAX_RETRIES - 1:
+            wait = RETRY_BASE_DELAY ** (attempt + 1)  # 2s → 4s → 8s
+            logger.info(f"   ⏳ {wait}s 后重试...")
+            time.sleep(wait)
+
+    logger.error("❌ [Stage 1] Qwen3-Max 重试耗尽，返回 None")
+    return None
 
 def call_kimi_refine(draft_content):
-    logger.info("💎 [Stage 2] Kimi (via Aliyun) 正在深度锐化...")
+    """
+    Stage 2: Kimi-K2.5 (深度智囊)
+    接收 Qwen 的草稿，输出辛辣的"术语+大白话"深度分析。
+    - 使用 MultiModalConversation 接口（Kimi-K2.5 的正确调用方式）。
+    - enable_thinking=True：强制开启内部推演，先思考再输出，质量更高。
+    - 地域限制：kimi-k2.5 仅支持中国大陆（北京）地域的 API Key。
+    - 降级策略：kimi-k2.5 失败 → qwen-plus 兜底（同接口）。
+    - 指数退避重试：最多 3 次，间隔 2/4/8 秒。
+    """
+    logger.info("💎 [Stage 2] Kimi-K2.5 正在深度锐化（思考模式开启）...")
+    dashscope.api_key = DASHSCOPE_API_KEY
+
+    messages = [
+        {"role": "system", "content": KIMI_PROMPT},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": f"请参考范文风格，深度润色以下草稿：\n\n{draft_content}"
+                }
+            ]
+        }
+    ]
+
+    # ── 主力：kimi-k2.5 ─────────────────────────────────
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = MultiModalConversation.call(
+                model='kimi-k2.5',
+                messages=messages,
+                extra_body={"enable_thinking": True}   # 强制思考模式
+            )
+            if response.status_code == HTTPStatus.OK:
+                result_text = response.output.choices[0].message.content
+                # content 可能是 list（含 thinking block），取纯文本
+                if isinstance(result_text, list):
+                    result_text = "\n".join(
+                        block.get("text", "") for block in result_text
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    )
+                logger.info("✅ [Stage 2] Kimi-K2.5 输出完成")
+                return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{result_text}"
+            else:
+                logger.warning(f"[Stage 2] Kimi-K2.5 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
+        except Exception as e:
+            logger.warning(f"[Stage 2] Kimi-K2.5 异常 (attempt {attempt+1}/{MAX_RETRIES}): {e}")
+
+        if attempt < MAX_RETRIES - 1:
+            wait = RETRY_BASE_DELAY ** (attempt + 1)
+            logger.info(f"   ⏳ {wait}s 后重试...")
+            time.sleep(wait)
+
+    # ── 降级：qwen-plus（Generation 接口，无需 MultiModal）────
+    logger.warning("⚠️ [Stage 2] Kimi-K2.5 重试耗尽，降级使用 qwen-plus...")
     try:
-        dashscope.api_key = DASHSCOPE_API_KEY
-        # 尝试调用 Kimi (Moonshot)
-        model_name = 'moonshot-v1-32k' 
-        
-        response = dashscope.Generation.call(
-            model=model_name, 
+        fallback_resp = Generation.call(
+            model='qwen-plus',
             messages=[
                 {"role": "system", "content": KIMI_PROMPT},
                 {"role": "user", "content": f"请参考范文风格，深度润色以下草稿：\n\n{draft_content}"}
-            ]
+            ],
+            extra_body={"enable_thinking": False}
         )
-        
-        if response.status_code == HTTPStatus.OK:
-            return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{response.output.text}"
+        if fallback_resp.status_code == HTTPStatus.OK:
+            logger.info("✅ [Stage 2] qwen-plus 降级成功")
+            return f"### Part 2: 深度搞钱逻辑 (Deep Dive · qwen-plus 降级版)\n\n{fallback_resp.output.text}"
         else:
-            # 降级策略
-            logger.warning(f"Kimi Call Failed: {response.message} -> 降级使用 Qwen-Plus 润色")
-            fallback_resp = dashscope.Generation.call(
-                model='qwen-plus',
-                messages=[
-                    {"role": "system", "content": KIMI_PROMPT},
-                    {"role": "user", "content": f"请参考范文风格，深度润色以下草稿：\n\n{draft_content}"}
-                ]
-            )
-            return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{fallback_resp.output.text}"
-
+            logger.error(f"[Stage 2] qwen-plus 降级也失败: {fallback_resp.message}")
     except Exception as e:
-        logger.error(f"Kimi/Fallback Exception: {e}")
-        return f"### Part 2 (Kimi调用失败)\n\n{draft_content}"
+        logger.error(f"[Stage 2] qwen-plus 降级异常: {e}")
+
+    # ── 最终兜底：返回原始草稿 ───────────────────────────
+    logger.error("❌ [Stage 2] 所有模型失败，返回原始草稿")
+    return f"### Part 2 (AI润色失败，原始草稿)\n\n{draft_content}"
 
 def dual_model_pipeline(news_items):
     if not news_items:
