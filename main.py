@@ -210,7 +210,7 @@ def fetch_all_data():
     logger.info(f"✅ 采集完成，筛选出 {len(all_news)} 条高价值情报")
     return all_news
 
-# ================= 4. J记财讯 AI 分析 (新 Prompt) =================
+# ================= 4. J记财讯 AI 分析 =================
 
 J_PROMPT = f"""
 # Role: "J记财讯" 首席商业情报分析师
@@ -275,6 +275,7 @@ def analyze_with_ai(news_items):
     logger.info("🧠 AI 正在进行深度拆解...")
     try:
         dashscope.api_key = DASHSCOPE_API_KEY
+        # 增加超时时间，防止 AI 思考太久导致连接中断
         response = dashscope.Generation.call(
             model='qwen-max', 
             messages=[
@@ -290,7 +291,7 @@ def analyze_with_ai(news_items):
         logger.error(f"AI Error: {e}")
         return "❌ 分析系统发生错误"
 
-# ================= 5. 生成交付物 (修复了之前的截断错误) =================
+# ================= 5. 生成交付物 =================
 
 async def generate_assets(content):
     if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
@@ -301,7 +302,6 @@ async def generate_assets(content):
     
     # 2. 生成 HTML (移动端适配)
     html_body = markdown.markdown(content)
-    # 使用 f-string 生成 HTML，注意三引号完整性
     html_template = f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -343,10 +343,11 @@ async def generate_assets(content):
     logger.info(f"🌐 HTML 保存: {HTML_FILE}")
     
     # 3. 生成 MP3 (使用清洗后的纯文本)
-    tts_text = clean_markdown_for_tts(content)
-    # 增加头部引导语
+    # ✅ 关键修正：这里统一使用了 clean_text_for_tts 这个函数名
+    tts_text = clean_text_for_tts(content)
+    
     intro = f"今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}。欢迎收听J记财讯。\n\n"
-    final_tts_text = intro + tts_text[:2500] # 限制长度防止超时
+    final_tts_text = intro + tts_text[:2500] 
     
     communicate = edge_tts.Communicate(final_tts_text, "zh-CN-YunxiNeural", rate="+10%")
     await communicate.save(AUDIO_FILE)
@@ -379,17 +380,14 @@ def upload_and_cleanup(files):
     # 2. 本地清理 (保留最近3天 - 基于文件名日期)
     logger.info("🧹 执行本地清理 (保留3天)...")
     
-    # 计算3天前的截止日期 (北京时间)
     cutoff_date = BEIJING_NOW - timedelta(days=3)
     cutoff_str = cutoff_date.strftime('%Y%m%d')
     
     for f in glob.glob(os.path.join(OUTPUT_DIR, '*')):
         filename = os.path.basename(f)
-        # 提取文件名中的日期 briefing_20260216.md
         match = re.search(r'(\d{8})', filename)
         if match:
             file_date_str = match.group(1)
-            # 如果文件日期 < 截止日期，则删除
             if file_date_str < cutoff_str:
                 try:
                     os.remove(f)
