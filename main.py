@@ -401,15 +401,15 @@ def call_qwen_structure(context):
 
 def call_kimi_refine(draft_content):
     """
-    Stage 2: kimi-k2-thinking (深度智囊)
+    Stage 2: kimi-k2.5 (深度智囊)
     接收 Qwen 的草稿，输出辛辣的"术语+大白话"深度分析。
-    - 使用 MultiModalConversation 接口（kimi-k2-thinking 的正确调用方式）。
+    - 使用 MultiModalConversation 接口（kimi-k2.5 的正确调用方式）。
     - enable_thinking=True：强制开启内部推演，先思考再输出，质量更高。
-    - 地域限制：kimi-k2-thinking 仅支持中国大陆（北京）地域的 API Key。
-    - 降级策略：kimi-k2-thinking 失败 → qwen-plus 兜底。
+    - 地域限制：kimi-k2.5 仅支持中国大陆（北京）地域的 API Key。
+    - 降级策略：kimi-k2.5 失败 → qwen-plus 兜底。
     - 指数退避重试：最多 3 次，间隔 2/4/8 秒。
     """
-    logger.info("💎 [Stage 2] kimi-k2-thinking 正在深度锐化（思考模式开启）...")
+    logger.info("💎 [Stage 2] kimi-k2.5 正在深度锐化（思考模式开启）...")
     dashscope.api_key = DASHSCOPE_API_KEY
 
     messages = [
@@ -425,25 +425,25 @@ def call_kimi_refine(draft_content):
         }
     ]
 
-    # ── 主力：kimi-k2-thinking ─────────────────────────────────
+    # ── 主力：kimi-k2.5 ─────────────────────────────────
     for attempt in range(MAX_RETRIES):
         try:
             response = MultiModalConversation.call(
-                model='kimi-k2-thinking',
+                model='kimi-k2.5',
                 messages=messages,
                 extra_body={"enable_thinking": True}
             )
             if response.status_code == HTTPStatus.OK:
                 result_text = _extract_text(response)
                 if result_text:
-                    logger.info(f"✅ [Stage 2] kimi-k2-thinking 输出完成 ({len(result_text)} 字)")
+                    logger.info(f"✅ [Stage 2] kimi-k2.5 输出完成 ({len(result_text)} 字)")
                     return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{result_text}"
                 else:
-                    logger.warning(f"[Stage 2] kimi-k2-thinking 返回空内容 (attempt {attempt+1}/{MAX_RETRIES})")
+                    logger.warning(f"[Stage 2] kimi-k2.5 返回空内容 (attempt {attempt+1}/{MAX_RETRIES})")
             else:
-                logger.warning(f"[Stage 2] kimi-k2-thinking 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
+                logger.warning(f"[Stage 2] kimi-k2.5 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
         except Exception as e:
-            logger.warning(f"[Stage 2] kimi-k2-thinking 异常 (attempt {attempt+1}/{MAX_RETRIES}): {e}")
+            logger.warning(f"[Stage 2] kimi-k2.5 异常 (attempt {attempt+1}/{MAX_RETRIES}): {e}")
 
         if attempt < MAX_RETRIES - 1:
             wait = RETRY_BASE_DELAY ** (attempt + 1)
@@ -451,7 +451,7 @@ def call_kimi_refine(draft_content):
             time.sleep(wait)
 
     # ── 降级：qwen-plus ──────────────────────────────────
-    logger.warning("⚠️ [Stage 2] kimi-k2-thinking 重试耗尽，降级使用 qwen-plus...")
+    logger.warning("⚠️ [Stage 2] kimi-k2.5 重试耗尽，降级使用 qwen-plus...")
     try:
         fallback_resp = Generation.call(
             model='qwen-plus',
