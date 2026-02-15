@@ -9,83 +9,45 @@ on:
   workflow_dispatch:
 
 jobs:
-  generate-and-upload:
+  build-and-deploy:
     runs-on: ubuntu-latest
     
     permissions:
-      contents: write  # 需要写权限来提交生成的文件
-    
+      contents: write  #以此权限提交生成的文件
+
     steps:
     - name: 📥 检出代码
       uses: actions/checkout@v4
-      
+
     - name: 🐍 设置 Python 环境
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
+
     - name: 📦 安装依赖
+      # 直接读取 requirements.txt，确保和本地环境一致
       run: |
         python -m pip install --upgrade pip
-        pip install --break-system-packages feedparser requests edge-tts aligo markdown
-        # 注意：这里补充了 markdown 库，防止 main.py 报错
-        
-    - name: 🤖 生成晨间情报
+        pip install -r requirements.txt
+
+    - name: 🚀 启动晨间猎手 (生成 -> 上传 -> 清理)
       env:
+        # 必须把所有密钥都传给 main.py
         DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-        BARK_KEY: ${{ secrets.BARK_KEY }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-      run: |
-        echo "开始生成晨间情报..."
-        python main.py
-        echo "情报生成完成"
-        
-    - name: ☁️ 上传到阿里云盘
-      env:
         ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
-        # 注意：不要在这里直接写带星号的文件名
+        BARK_KEY: ${{ secrets.BARK_KEY }}
       run: |
-        echo "准备上传到阿里云盘..."
-        # === 核心修复：动态查找生成的mp3文件 ===
-        export AUDIO_FILE=$(ls output/briefing_*.mp3 | head -n 1)
-        
-        if [ -z "$AUDIO_FILE" ]; then
-          echo "❌ 未找到音频文件，跳过上传"
-          exit 1
-        fi
-        
-        echo "✅ 找到目标文件: $AUDIO_FILE"
-        python upload_to_aliyunpan.py
-        
-    - name: 🧹 清理旧文件（只保留最近3天）
+        # 运行核心脚本，所有的逻辑都在这里面完成了
+        python main.py
+
+    - name: 📤 同步变更到仓库
       run: |
-        echo "开始清理旧文件..."
-        find output/ -name "*.mp3" -type f -mtime +3 -delete 2>/dev/null || true
-        find output/ -name "*.txt" -type f -mtime +3 -delete 2>/dev/null || true
-        find output/ -name "*.html" -type f -mtime +3 -delete 2>/dev/null || true
-        find output/ -name "*.md" -type f -mtime +3 -delete 2>/dev/null || true
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
         
-    - name: 📤 提交生成的文件到 GitHub
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        # 确保提交所有生成格式的文件
-        git add output/ feed.xml
-        # 如果有变更才提交
-        git diff --quiet && git diff --staged --quiet || git commit -m "🔄 更新晨间情报 $(date +'%Y-%m-%d %H:%M')"
+        # 关键：git add . 会自动识别 Python 脚本删除的文件
+        git add .
+        
+        # 只有当有文件变动（有新文件或有文件被删）时才提交
+        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 自动更新：生成新情报并清理旧文件"
         git push
-      
-    - name: 📊 生成运行统计报告
-      if: always()
-      run: |
-        echo "### 📈 运行统计" >> $GITHUB_STEP_SUMMARY
-        TODAY=$(date +%Y%m%d)
-        AUDIO_FILE=$(ls output/briefing_${TODAY}.mp3 2>/dev/null || echo "")
-        
-        if [ -f "$AUDIO_FILE" ]; then
-           FILE_SIZE=$(du -h "$AUDIO_FILE" | cut -f1)
-           echo "- 🎙️ 音频生成成功: $FILE_SIZE" >> $GITHUB_STEP_SUMMARY
-        else
-           echo "- ⚠️ 音频文件未找到" >> $GITHUB_STEP_SUMMARY
-        fi
-        echo "- ⏰ 完成时间: $(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_STEP_SUMMARY
