@@ -17,7 +17,7 @@ import edge_tts
 import dashscope
 from aligo import Aligo
 
-# ================= 0. 全局配置与时区锁定 =================
+# ================= 0. 全局配置 =================
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -26,13 +26,13 @@ logging.basicConfig(
 logger = logging.getLogger("J-Intel")
 
 # 🟢 核心：强制锁定北京时间 (UTC+8)
-# 无论 GitHub Actions 服务器在哪里，都以北京时间为准
+# 无论 GitHub Actions 服务器在哪，都以北京时间为准
 utc_now = datetime.utcnow()
 BEIJING_NOW = utc_now + timedelta(hours=8)
 
 # 日期格式化
-DATE_STR = BEIJING_NOW.strftime('%Y%m%d') # 用于文件名 20260216
-DISPLAY_DATE = BEIJING_NOW.strftime('%Y年%m月%d日') # 用于显示
+DATE_STR = BEIJING_NOW.strftime('%Y%m%d') # 文件名用
+DISPLAY_DATE = BEIJING_NOW.strftime('%Y年%m月%d日') # 报告显示用
 WEEK_DAYS = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 DISPLAY_WEEKDAY = WEEK_DAYS[BEIJING_NOW.weekday()]
 
@@ -51,50 +51,45 @@ HTML_FILE = f'{OUTPUT_DIR}/briefing_{DATE_STR}.html'
 # ================= 1. 信源分层策略 (Stratified Source Strategy) =================
 
 def load_opml_sources(file_path='hn_popular_blogs_2025.opml'):
-    """解析 OPML 文件，提取博客 RSS"""
+    """解析 OPML 文件，提取深度博客 RSS"""
     sources = []
     if os.path.exists(file_path):
         try:
             tree = ET.parse(file_path)
             root = tree.getroot()
-            # 提取所有 rss 类型的 outline
             for outline in root.findall(".//outline[@type='rss']"):
                 url = outline.get('xmlUrl')
-                title = outline.get('text') or outline.get('title')
-                if url:
-                    sources.append(url)
-            logger.info(f"📂 已加载 OPML 源: {len(sources)} 个")
+                if url: sources.append(url)
+            logger.info(f"📂 已加载 OPML 深度源: {len(sources)} 个")
         except Exception as e:
             logger.error(f"❌ OPML 解析失败: {e}")
     return sources
 
-# 🌟 定义四层信源结构
 def get_rss_layers():
     opml_blogs = load_opml_sources()
-    
-    # 随机抽取 5 个 OPML 博客作为今日深度源 (避免 token 爆炸)
-    selected_blogs = random.sample(opml_blogs, min(5, len(opml_blogs))) if opml_blogs else []
+    # 随机抽取 3 个博客防止 token 爆炸，保持每日新鲜感
+    selected_blogs = random.sample(opml_blogs, min(3, len(opml_blogs))) if opml_blogs else []
 
     return {
-        # 第一层：实时信号 (高频，只看标题)
+        # 第一层：实时信号 (高频，快讯)
         "L1_Signal": {
-            "weight": 1, # 基础分低，依靠关键词提分
+            "weight": 1, 
             "urls": [
                 "https://rsshub.rssforever.com/wallstreetcn/live/global/2", # 华尔街见闻 Live
                 "https://rsshub.rssforever.com/cls/telegraph/red",          # 财联社电报
                 "https://rsshub.app/news/xhsxw"                               # 新华社
             ]
         },
-        # 第二层：行业解读 (深度分析主力)
+        # 第二层：行业解读 (商业价值分析主力)
         "L2_Industry": {
-            "weight": 3, # 基础分高
+            "weight": 3, 
             "urls": [
                 "https://36kr.com/feed",
                 "https://rsshub.app/huxiu/channel/103", # 虎嗅
                 "https://rsshub.rssforever.com/yicai/headline" # 第一财经
             ]
         },
-        # 第三层：技术情报 (HN, Github)
+        # 第三层：技术情报 (低密度)
         "L3_Tech": {
             "weight": 2,
             "urls": [
@@ -103,7 +98,7 @@ def get_rss_layers():
                 "https://rsshub.app/arxiv/user/karpathy" 
             ]
         },
-        # 第四层：深度洞察 (OPML 博客 + 研报)
+        # 第四层：深度洞察 (周报级/低频)
         "L4_Deep": {
             "weight": 2,
             "urls": selected_blogs + [
@@ -114,25 +109,21 @@ def get_rss_layers():
 
 # ================= 2. 智能评分与清洗 =================
 
-# 关键词库
-KW_HIGH_VALUE = ["融资", "财报", "暴涨", "暴跌", "政策", "首发", "独家", "SaaS", "变现", "套利", "红利", "风口", "底层逻辑"]
+KW_HIGH_VALUE = ["融资", "财报", "暴涨", "暴跌", "政策", "首发", "独家", "SaaS", "变现", "套利", "红利", "风口", "底层逻辑", "架构", "开源"]
 KW_LOW_VALUE = ["促销", "抽奖", "八卦", "预告", "开箱", "体验", "游戏", "电影", "综艺"]
 
 def calculate_score(title, summary, base_weight):
     """
-    计算商业价值分 (1-5分)
-    < 3分：丢弃
+    商业价值评分 (1-5分)
+    < 3分：丢弃 (过滤噪音)
     >= 3分：进入快讯
     >= 4分：进入深度拆解候选池
     """
     score = base_weight
     content = (title + summary).lower()
     
-    # 加分项
     for kw in KW_HIGH_VALUE:
         if kw in content: score += 1
-    
-    # 减分项
     for kw in KW_LOW_VALUE:
         if kw in content: score -= 2
         
@@ -140,7 +131,7 @@ def calculate_score(title, summary, base_weight):
 
 def clean_text_for_tts(text: str) -> str:
     """
-    TTS 专用清洗：移除 Markdown 符号，确保朗读顺畅
+    🎤 TTS 专用清洗：移除 Markdown 符号，防止读出乱码
     """
     # 1. 移除 Markdown 链接 [text](url) -> text
     text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
@@ -154,7 +145,9 @@ def clean_text_for_tts(text: str) -> str:
     text = re.sub(r'^\s*[-*]\s', '', text, flags=re.MULTILINE)
     # 6. 移除 HTML 标签
     text = re.sub(r'<[^>]+>', '', text)
-    # 7. 移除多余空行
+    # 7. 移除分隔线
+    text = re.sub(r'[-=]{3,}', '', text)
+    # 8. 移除多余空行
     text = re.sub(r'\n{3,}', '\n\n', text)
     
     return text.strip()
@@ -168,15 +161,14 @@ def fetch_single_feed(url, layer_name, base_weight):
         resp = requests.get(url, headers=headers, timeout=10)
         feed = feedparser.parse(resp.content)
         
-        # 时间过滤：只取北京时间过去 24 小时内的
+        # ⏰ 时间过滤：只取北京时间过去 24 小时内的
         cutoff_time = BEIJING_NOW - timedelta(hours=24)
         
-        for entry in feed.entries[:8]: # 每个源最多取8条
-            # 解析时间 (尝试处理多种格式)
+        for entry in feed.entries[:8]: 
             pub_time = BEIJING_NOW # 默认最新
             if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                # published_parsed 是 UTC，需要 +8 转北京时间
                 try:
+                    # feedparser 解析的是 UTC，需 +8 转北京时间
                     pub_time = datetime(*entry.published_parsed[:6]) + timedelta(hours=8)
                 except: pass
             
@@ -196,7 +188,7 @@ def fetch_single_feed(url, layer_name, base_weight):
                         "source": feed.feed.get('title', 'Unknown')
                     })
     except Exception as e:
-        pass # 忽略单个源的错误
+        pass 
     return items
 
 def fetch_all_data():
@@ -231,20 +223,24 @@ J_PROMPT = f"""
 所有分析必须基于“过去24小时”的情报。
 
 ## Constraints & Principles
-1. **真实性**：严格基于提供的事实，禁止编造。
-2. **去重合并**：对相似新闻进行合并。
-3. **风格**：冷峻、客观、实用、直接。拒绝正确的废话。
+1. **时效性**：仅关注过去24小时内的情报，严禁穿越历史。
+2. **真实性**：严格基于事实，禁止编造。
+3. **去重合并**：对相似新闻进行合并。
+4. **风格**：冷峻、客观、实用、直接。拒绝正确的废话。
 
 ## Workflow
 请基于提供的【素材池】，输出以下两部分：
 
 ### Part 1: 全球热点速递 (Top 10)
-* **筛选标准**：高商业价值、技术突破、政策剧变。
-* **格式**：
-  1. **[标签] 标题**：一句话讲清发生了什么 + 对行业/搞钱的直接影响。(150字内)
+* **筛选标准**：高商业价值、技术突破、政策剧变、巨头动向。
+* **格式**：每条控制在150字以内。
+* **内容**：一句话讲清发生了什么 + 对行业/搞钱的直接影响。
 
 ### Part 2: 深度搞钱逻辑 (Deep Dive)
 * **筛选**：从热点中嗅出“钱味”最浓的 1-3 个话题。
+* **思维模型 (作为内核)**：
+  1. 焦虑信号：谁在焦虑？流量去哪了？
+  2. 掘金铲子：定位生态位，找蓝海。
 * **输出结构 (必须严格按此格式)**：
 
 #### 标题：[核心机会/痛点] - [具体的搞钱方向]
@@ -255,8 +251,8 @@ J_PROMPT = f"""
 
 **2. 机遇与风险辩证 (Analysis)**
 * **生态位分析**：当前处于产业链的哪个环节？
-* **红海警示**：哪些方向已过热？
-* **蓝海判断**：真正的缺口在哪里？
+* **红海警示**：明确指出哪些方向已经过热。
+* **蓝海判断**：指出真正的缺口在哪里。
 
 **3. 搞钱路径 (Actionable Path)**
 * **行动建议**：(如：开发插件/制作SOP/搬运信息差)
@@ -267,7 +263,7 @@ def analyze_with_ai(news_items):
     if not news_items:
         return f"# J记财讯 · {DISPLAY_DATE}\n\n**⚠️ 今日无有效情报信号**"
 
-    # 构建素材池：取前 40 条高分新闻，避免 token 溢出
+    # 构建素材池：取前 40 条高分新闻
     context = ""
     for i, item in enumerate(news_items[:40]):
         context += f"{i+1}. [{item['source']}] (分:{item['score']}) {item['title']}\n摘要：{item['summary']}\n\n"
@@ -276,7 +272,7 @@ def analyze_with_ai(news_items):
     try:
         dashscope.api_key = DASHSCOPE_API_KEY
         response = dashscope.Generation.call(
-            model='qwen-max', # 必须用强模型
+            model='qwen-max', 
             messages=[
                 {'role': 'system', 'content': J_PROMPT},
                 {'role': 'user', 'content': f"今日情报素材池：\n{context}"}
@@ -314,100 +310,4 @@ async def generate_assets(content):
             h1 {{ font-size: 24px; color: #000; margin-bottom: 5px; }}
             .date {{ color: #8e8e93; font-size: 14px; margin-bottom: 25px; }}
             h2 {{ margin-top: 35px; padding-bottom: 10px; border-bottom: 2px solid #007aff; color: #007aff; }}
-            h4 {{ background: #f2f2f7; padding: 12px; border-radius: 8px; margin-top: 25px; border-left: 5px solid #34c759; }}
-            strong {{ color: #3a3a3c; font-weight: 700; }}
-            audio {{ width: 100%; margin: 20px 0; border-radius: 30px; }}
-            li {{ margin-bottom: 10px; line-height: 1.6; }}
-            .footer {{ text-align: center; margin-top: 40px; color: #c7c7cc; font-size: 12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🦁 J记财讯 · 商业内参</h1>
-            <div class="date">📅 {DISPLAY_DATE} {DISPLAY_WEEKDAY} | 📍 Beijing Time</div>
-            
-            <div style="background:#e5f1ff; padding:15px; border-radius:10px; margin-bottom:20px;">
-                <strong>🎧 语音播报：</strong>
-                <audio controls src="briefing_{DATE_STR}.mp3"></audio>
-            </div>
-            
-            {html_body}
-            
-            <div class="footer">Powered by J-Intel System | Data: Global RSS</div>
-        </div>
-    </body>
-    </html>
-    """
-    with open(HTML_FILE, 'w', encoding='utf-8') as f: f.write(html_template)
-    logger.info(f"🌐 HTML 保存: {HTML_FILE}")
-    
-    # 3. 生成 MP3 (使用清洗后的纯文本)
-    tts_text = clean_markdown_for_tts(content)
-    # 增加头部引导语
-    intro = f"今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}。欢迎收听J记财讯。\n\n"
-    final_tts_text = intro + tts_text[:2500] # 限制长度防止超时
-    
-    communicate = edge_tts.Communicate(final_tts_text, "zh-CN-YunxiNeural", rate="+10%")
-    await communicate.save(AUDIO_FILE)
-    logger.info(f"🎙️ MP3 保存: {AUDIO_FILE}")
-    
-    return [MD_FILE, HTML_FILE, AUDIO_FILE]
-
-# ================= 6. 云端归档与本地清理 =================
-
-def upload_and_cleanup(files):
-    # 1. 阿里云盘上传
-    if ALIYUN_TOKEN:
-        try:
-            logger.info("☁️ 连接阿里云盘...")
-            ali = Aligo(level=logging.ERROR, refresh_token=ALIYUN_TOKEN)
-            remote_folder = ali.get_folder_by_path('/晨间情报')
-            if not remote_folder:
-                ali.create_folder('/晨间情报')
-                remote_folder = ali.get_folder_by_path('/晨间情报')
-            
-            for f in files:
-                ali.upload_file(f, remote_folder.file_id)
-                logger.info(f"   ⬆️ 上传成功: {os.path.basename(f)}")
-            logger.info("✅ 云盘备份完成")
-        except Exception as e:
-            logger.error(f"❌ 云盘上传失败: {e}")
-    else:
-        logger.warning("⚠️ 未配置 ALIYUN_REFRESH_TOKEN，跳过上传")
-
-    # 2. 本地清理 (保留最近3天 - 基于文件名日期)
-    logger.info("🧹 执行本地清理 (保留3天)...")
-    
-    # 计算3天前的截止日期 (北京时间)
-    cutoff_date = BEIJING_NOW - timedelta(days=3)
-    cutoff_str = cutoff_date.strftime('%Y%m%d')
-    
-    for f in glob.glob(os.path.join(OUTPUT_DIR, '*')):
-        filename = os.path.basename(f)
-        # 提取文件名中的日期 briefing_20260216.md
-        match = re.search(r'(\d{8})', filename)
-        if match:
-            file_date_str = match.group(1)
-            # 如果文件日期 < 截止日期，则删除
-            if file_date_str < cutoff_str:
-                try:
-                    os.remove(f)
-                    logger.info(f"   🗑️ 删除旧文件: {filename}")
-                except: pass
-
-# ================= 主程序入口 =================
-
-if __name__ == "__main__":
-    # 1. 采集
-    news_data = fetch_all_data()
-    
-    # 2. 分析
-    report_content = analyze_with_ai(news_data)
-    
-    # 3. 生成文件
-    generated_files = asyncio.run(generate_assets(report_content))
-    
-    # 4. 备份与清理
-    upload_and_cleanup(generated_files)
-    
-    logger.info("🎉 J记财讯任务圆满完成")
+            h4 {{ background: #f2f2f
