@@ -26,15 +26,16 @@ jobs:
         python-version: '3.11'
 
     - name: 📦 安装核心依赖
-      # 安装 aligo(云盘), markdown(网页), edge-tts(语音), feedparser(RSS), lxml(解析OPML)
+      # 安装 dashscope (阿里云SDK), aligo (云盘), edge-tts (语音), lxml (解析OPML)
       run: |
         python -m pip install --upgrade pip
         pip install feedparser requests edge-tts markdown dashscope aligo lxml
 
-    - name: 🚀 启动 J记财讯
+    - name: 🚀 启动 J记财讯 (Aliyun All-in-One)
       env:
-        # 传递密钥给 main.py
+        # Qwen 和 Kimi 都通过这个 Key 调用
         DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+        # 阿里云盘和 Bark
         ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
         BARK_KEY: ${{ secrets.BARK_KEY }}
         GITHUB_REPOSITORY: ${{ github.repository }}
@@ -47,7 +48,7 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 🟢 关键步骤：git add . 会自动处理 新增、修改 和 删除 的文件
+        # 🟢 关键步骤：添加所有变更（包括 python 删除的旧文件）
         git add .
         
         # 提交信息带上北京时间 (+8 hours)
