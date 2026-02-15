@@ -61,7 +61,8 @@ jobs:
           # 您的 main.py 中已经写了 `upload_and_cleanup` 函数，它会删除旧文件。
           # git add . 会自动把 python 删掉的文件记录为 "deleted"，无需此处手动处理。
           
-          git add .
+          git add -f output/   # 强制追踪 output/ 下所有文件（mp3/html/md），解决不进仓库问题
+          git add .            # 追踪其余变更（feed.xml 等）
 
           # 检查是否有变更（新生成的文件 或 python脚本删除的旧文件）
           if git diff --staged --quiet; then
