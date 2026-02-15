@@ -1,408 +1,197 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-私人晨间情报官 - GitHub Actions 生产环境专用版
-功能：
-1. 抓取全网核心商业/科技新闻 (混合源抗反爬策略)
-2. "商业猎手"风格深度拆解 (严格基于事实)
-3. 生成 .mp3 音频 + .html 移动端网页
-4. Bark 推送网页链接
-"""
-
 import os
-import sys
-import feedparser
-import requests
-from datetime import datetime, timedelta
-import json
 import asyncio
-import time
-import re
+import feedparser  # 你的新武器
+import edge_tts
+from datetime import datetime
+from http import HTTPStatus
+import dashscope
 import glob
-from typing import List, Dict, Tuple
 
-# ========== 自动依赖检查与安装 ==========
-try:
-    import edge_tts
-except ImportError:
-    print("📦 正在安装 edge-tts...")
-    os.system("pip install edge-tts")
-    import edge_tts
+# ================= 1. 猎手雷达设置 (借鉴 Intel Briefing) =================
 
-try:
-    import markdown
-except ImportError:
-    print("📦 正在安装 markdown...")
-    os.system("pip install markdown")
-    import markdown
+# 这里把 V2EX (焦虑源) 和 Hacker News (技术源) 都加进来了
+RSS_SOURCES = {
+    "signals": [ # 【焦虑信号】寻找痛点、求助、吐槽
+        "https://www.v2ex.com/index.xml",  # V2EX 全站热帖
+        "https://www.reddit.com/r/SaaS/new/.rss", # SaaS 圈子
+    ],
+    "shovels": [ # 【掘金铲子】寻找工具、方案
+        "https://news.ycombinator.com/rss", # Hacker News
+        "https://stratechery.com/feed/",   # 深度商业分析
+    ],
+    "macro": [   # 【宏观风向】钱往哪里流
+        "https://feed.36kr.com/feed",      # 36Kr
+        # 你可以继续在这里加华尔街见闻的 RSS
+    ]
+}
 
-# ========== 全局配置区 ==========
-DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
-BARK_KEY = os.getenv('BARK_KEY')
-GITHUB_REPO = os.getenv('GITHUB_REPOSITORY', 'yourname/yourrepo') 
+# ================= 2. 猎手思维模型 (你的新 Prompt) =================
 
-# 🔥 终极 RSS 源列表 (混合动力版 - 适配 GitHub US 节点)
-# 策略：GitHub Actions 位于美国，访问 rsshub.app 通常顺畅，
-# 但部分源站反爬严格，故核心源使用抗封锁能力强的镜像。
-RSS_SOURCES = [
-    # --- 第一梯队：核心财经 (使用高可用镜像) ---
-    "https://rsshub.rssforever.com/wallstreetcn/live/global/2",      # 华尔街见闻-快讯
-    "https://rsshub.rssforever.com/wallstreetcn/hot/day",            # 华尔街见闻-热榜
-    "https://rsshub.rssforever.com/cls/telegraph/red",               # 财联社-电报
-    "https://rsshub.rssforever.com/yicai/headline",                  # 第一财经-头条
+HUNTER_SYSTEM_PROMPT = """
+你不再是新闻播报员，你是“晨间商业猎手”。你的任务是从信息中嗅出“钱味”。
+请阅读以下聚合的全球情报，严格按照框架输出一份【商业情报内参】：
+
+## 🎯 第一步：焦虑信号 (Signal)
+* **逆向判断**：忽略热点情绪，指出流量正流向哪个具体细分领域？
+* **痛点锁定**：谁在焦虑？(新手/老手/企业主) 他们的具体痛苦是什么？(太贵/太慢/太难)
+* **机会判断**：哪里有“海量新人涌入”但“基础设施只有简陋的中游产品”，哪里就是机会。
+
+## 🛠 第二步：掘金铲子 (Shovel)
+* **生态位分析**：当前处于产业链的上游(工具)、中游(生产)还是下游(分发)？
+* **避坑指南**：明确指出哪里是红海，不要去碰。
+* **搞钱路径**：基于今日情报，给出一个具体的行动建议。(例如：开发某类插件、制作某类教程、提供某类数据服务)
+
+## 📢 猎手广播 (Podcast Script)
+(请生成一段300字以内的口语化播报文稿。
+要求：语气犀利、自信，像个老朋友一样告诉听众今天的最大机会在哪里。
+不要念新闻标题，直接说结论和机会点。)
+"""
+
+# ================= 3. 核心功能函数 =================
+
+def fetch_rss_intel(category):
+    """抓取指定分类的 RSS 情报"""
+    print(f"🕵️‍♂️ [猎手雷达] 正在扫描 {category} 频道...")
+    combined_content = ""
     
-    # --- 第二梯队：权威官媒 (官方源 + 伪装头) ---
-    "https://rsshub.app/news/xhsxw",                      # 新华社
-    "https://rsshub.app/thepaper/channel/25951",          # 澎湃-财经
-    "https://rsshub.app/thepaper/channel/25950",          # 澎湃-时事
-    
-    # --- 第三梯队：深度与科技 (混合策略) ---
-    "https://rsshub.rssforever.com/36kr/newsflashes",     # 36Kr
-    "https://rsshub.rssforever.com/sspai/index",          # 少数派
-    "https://rsshub.rssforever.com/woshipm/popular/daily",# 产品经理
-    "https://rsshub.app/huxiu/channel/103",               # 虎嗅
-    
-    # --- 第四梯队：研报 ---
-    "https://rsshub.rssforever.com/eastmoney/report/strategyreport", # 策略研报
-]
+    # 遍历该分类下的所有源
+    for url in RSS_SOURCES.get(category, []):
+        try:
+            # 设置超时，防止卡死
+            feed = feedparser.parse(url)
+            # 只取前 3 条最新内容，避免 Token 爆炸
+            for entry in feed.entries[:3]:
+                title = getattr(entry, 'title', '无标题')
+                link = getattr(entry, 'link', '无链接')
+                # 清洗摘要，去掉HTML标签过于复杂的部分，只取前200字
+                summary = getattr(entry, 'summary', '')[:200] 
+                combined_content += f"【标题】{title}\n【链接】{link}\n【摘要】{summary}\n\n"
+        except Exception as e:
+            print(f"⚠️ 抓取失败 {url}: {e}")
+            
+    return combined_content
 
-# 文件路径配置
-OUTPUT_DIR = 'output'
-DATE_STR = datetime.now().strftime('%Y%m%d')
-AUDIO_FILENAME = f'briefing_{DATE_STR}.mp3'
-AUDIO_FILE = f'{OUTPUT_DIR}/{AUDIO_FILENAME}'
-MD_FILE = f'{OUTPUT_DIR}/briefing_{DATE_STR}.md'
-HTML_FILE = f'{OUTPUT_DIR}/briefing_{DATE_STR}.html'
-RSS_FILE = 'feed.xml'
+def analyze_with_hunter_ai(content):
+    """调用通义千问进行深度拆解"""
+    if not content:
+        return "今日雷达未捕捉到有效信号。"
 
-VOICE_NAME = 'zh-CN-YunxiNeural'
+    print("🧠 [猎手大脑] 正在拆解商业逻辑...")
+    try:
+        dashscope.api_key = os.getenv("DASHSCOPE_API_KEY")
+        response = dashscope.Generation.call(
+            model=dashscope.Generation.Models.qwen_turbo, 
+            messages=[
+                {'role': 'system', 'content': HUNTER_SYSTEM_PROMPT},
+                {'role': 'user', 'content': f"今日情报汇总数据：\n{content}"}
+            ]
+        )
+        
+        if response.status_code == HTTPStatus.OK:
+            return response.output.text
+        else:
+            print(f"❌ AI分析失败: {response.code} - {response.message}")
+            return "AI 暂时掉线，请检查 API Key 或额度。"
+            
+    except Exception as e:
+        print(f"❌ 系统错误: {e}")
+        return "系统运行出错。"
 
-# ========== 核心功能函数 ==========
-
-def clean_text_for_tts(text: str) -> str:
-    """TTS 文本清洗：移除 Markdown 符号，保留可读内容"""
-    text = re.sub(r'#+\s?', '', text)              # 去标题
-    text = re.sub(r'\*\*|__|\*', '', text)         # 去加粗
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text) # 去链接保留文本
-    text = re.sub(r'>\s?', '', text)               # 去引用
-    text = re.sub(r'[-*]{3,}', '', text)           # 去分割线
-    text = re.sub(r'📊.*', '', text, flags=re.S)   # 去掉末尾的统计模块
-    return text.strip()
-
-def cleanup_old_files(days_to_keep: int = 3):
-    """清理历史文件，防止仓库膨胀"""
-    print(f"🧹 清理 {days_to_keep} 天前的旧文件...")
+def cleanup_old_files(output_dir="output", days_to_keep=3):
+    """🧹 自动清理 3 天前的旧文件"""
+    print("🧹 [扫地僧] 开始清理过期情报...")
     now = time.time()
     cutoff = now - (days_to_keep * 86400)
-    if not os.path.exists(OUTPUT_DIR): return
-    files = glob.glob(os.path.join(OUTPUT_DIR, '*'))
-    for f in files:
-        if os.path.basename(f).startswith('.'): continue
-        if os.path.getmtime(f) < cutoff:
-            try: os.remove(f)
-            except: pass
-
-def send_bark_notification(title: str, content: str, click_url: str = None):
-    """发送 Bark 手机推送"""
-    if not BARK_KEY: return
-    try:
-        # 摘要截取，去掉换行
-        summary = content.replace('\n', ' ')[:100] + "..."
-        url = f"https://api.day.app/{BARK_KEY}/{title}/{summary}"
-        params = {
-            'group': 'MorningBrief',
-            'icon': 'https://cdn-icons-png.flaticon.com/512/2965/2965363.png'
-        }
-        if click_url: params['url'] = click_url
-        requests.get(url, params=params, timeout=10)
-        print(f"✅ Bark 推送成功")
-    except Exception as e:
-        print(f"⚠️ Bark 推送失败: {e}")
-
-def generate_html_file(markdown_text: str, output_path: str, audio_filename: str):
-    """生成移动端友好的 HTML 页面"""
-    print("🎨 正在生成 HTML 网页...")
-    html_body = markdown.markdown(markdown_text)
     
-    template = f"""
-    <!DOCTYPE html>
-    <html lang="zh-CN">
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        return
+
+    files = glob.glob(os.path.join(output_dir, "*"))
+    for f in files:
+        # 不删除隐藏文件
+        if os.path.basename(f).startswith("."):
+            continue
+        if os.stat(f).st_mtime < cutoff:
+            try:
+                os.remove(f)
+                print(f"   🗑️ 已删除过期文件: {os.path.basename(f)}")
+            except Exception as e:
+                print(f"   ❌ 删除失败: {e}")
+
+# ================= 4. 主程序入口 =================
+
+async def main():
+    # 1. 准备环境
+    today_str = datetime.now().strftime("%Y%m%d")
+    output_dir = "output"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # 2. 全网扫描 (收集三大类情报)
+    print("🚀 晨间猎手任务启动...")
+    signals = fetch_rss_intel("signals")
+    shovels = fetch_rss_intel("shovels")
+    macro = fetch_rss_intel("macro")
+    
+    full_intel_text = f"=== 焦虑信号源 ===\n{signals}\n\n=== 掘金铲子源 ===\n{shovels}\n\n=== 宏观风向源 ===\n{macro}"
+    
+    # 3. AI 深度分析
+    analysis_report = analyze_with_hunter_ai(full_intel_text)
+    
+    # 4. 保存文字报告 (Markdown)
+    md_filename = os.path.join(output_dir, f"briefing_{today_str}.md")
+    with open(md_filename, "w", encoding="utf-8") as f:
+        f.write(f"# 🕵️‍♂️ 晨间猎手内参 ({today_str})\n\n")
+        f.write(analysis_report)
+    print(f"✅ 文字报告已保存: {md_filename}")
+    
+    # 5. 生成语音 (提取分析结果中的播报部分)
+    # 简单策略：直接朗读 AI 生成的报告（如果报告太长，建议手动让 AI 只输出 500 字摘要）
+    # 这里我们假设 Prompt 里的“猎手广播”在最后，为了保险，我们朗读全文的前 800 字
+    tts_text = analysis_report[:1000] 
+    
+    mp3_filename = os.path.join(output_dir, f"briefing_{today_str}.mp3")
+    print(f"🎙️ 正在生成语音 (使用 Yunxi 音色)...")
+    
+    communicate = edge_tts.Communicate(tts_text, "zh-CN-YunxiNeural")
+    await communicate.save(mp3_filename)
+    print(f"✅ 语音文件已生成: {mp3_filename}")
+
+    # 6. 生成简单的 HTML (适配你的 GitHub Pages)
+    html_filename = os.path.join(output_dir, f"briefing_{today_str}.html")
+    html_content = f"""
+    <html>
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>晨间猎手内参</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>晨间猎手内参 {today_str}</title>
         <style>
-            body {{ font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif; background: #f7f7f7; color: #333; line-height: 1.75; margin: 0; padding: 0; }}
-            .container {{ max-width: 650px; margin: 0 auto; background: #fff; padding: 20px 18px; min-height: 100vh; }}
-            h1 {{ font-size: 22px; font-weight: bold; margin-bottom: 10px; line-height: 1.4; }}
-            h2 {{ font-size: 18px; margin-top: 35px; border-left: 4px solid #d32f2f; padding-left: 10px; font-weight: 700; margin-bottom: 15px; }}
-            h3 {{ font-size: 16px; font-weight: bold; margin-top: 20px; color: #444; }}
-            p {{ margin-bottom: 16px; font-size: 16px; text-align: justify; }}
-            strong {{ color: #d32f2f; font-weight: 700; }}
-            ul {{ padding-left: 20px; }}
-            li {{ margin-bottom: 8px; font-size: 16px; }}
-            .audio-box {{ margin: 20px 0; padding: 15px; background: #f1f3f4; border-radius: 8px; text-align: center; }}
-            audio {{ width: 100%; margin-top: 10px; outline: none; }}
-            .meta {{ font-size: 14px; color: #888; margin-bottom: 20px; }}
-            .footer {{ text-align: center; font-size: 12px; color: #ccc; margin-top: 50px; padding-bottom: 30px; }}
-            hr {{ border: 0; border-top: 1px solid #eee; margin: 30px 0; }}
+            body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; line-height: 1.6; max-width: 800px; margin: 0 auto; background-color: #f4f4f5; }}
+            .container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+            h1 {{ color: #333; }}
+            h2 {{ color: #0066cc; border-bottom: 2px solid #0066cc; padding-bottom: 10px; margin-top: 30px; }}
+            audio {{ width: 100%; margin: 20px 0; }}
+            .markdown-body {{ font-size: 16px; color: #333; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>☕️ 晨间猎手内参 · 深度咖啡版</h1>
-            <div class="meta">{datetime.now().strftime('%Y年%m月%d日')} | AI 商业情报</div>
-            
-            <div class="audio-box">
-                <div style="font-weight:bold; color:#555; margin-bottom:5px;">🎧 点击收听今日简报</div>
-                <audio controls src="./{audio_filename}">您的浏览器不支持音频播放。</audio>
+            <h1>🕵️‍♂️ 晨间猎手内参 ({today_str})</h1>
+            <audio controls src="briefing_{today_str}.mp3"></audio>
+            <div class="markdown-body">
+                {analysis_report.replace(chr(10), '<br>')}
             </div>
-            
-            {html_body}
-            
-            <div class="footer">Powered by AI Hunter & GitHub Actions</div>
         </div>
     </body>
     </html>
     """
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(template)
+    with open(html_filename, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"✅ 网页文件已生成: {html_filename}")
+    
+    # 7. 清理旧文件
+    cleanup_old_files(output_dir, days_to_keep=3)
 
-# ========== 核心逻辑区 ==========
-
-def fetch_rss_articles() -> Tuple[List[Dict], str]:
-    """抓取 RSS 并返回 (文章列表, 统计信息字符串)"""
-    articles = []
-    stats = {}
-    
-    now = datetime.now()
-    cutoff_time = now - timedelta(hours=25) 
-    
-    # 伪装成 Chrome 浏览器，解决官方源的反爬限制
-    FAKE_HEADERS = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8'
-    }
-    
-    print(f"📰 正在从 {len(RSS_SOURCES)} 个源抓取新闻...")
-    
-    for source_url in RSS_SOURCES:
-        try:
-            # 使用 requests 获取内容，再传给 feedparser，这样可以完全控制 Headers
-            resp = requests.get(source_url, headers=FAKE_HEADERS, timeout=15)
-            if resp.status_code != 200:
-                print(f"  ❌ {source_url}: HTTP {resp.status_code}")
-                continue
-                
-            feed = feedparser.parse(resp.content)
-            source_name = feed.feed.get('title', '未知来源').replace('RSSHub', '').replace(' - ', '').strip()
-            
-            count = 0
-            for entry in feed.entries[:15]:
-                # 解析时间
-                pub_time = None
-                if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    pub_time = datetime(*entry.published_parsed[:6])
-                
-                # 筛选最近25小时
-                if not pub_time or pub_time > cutoff_time:
-                    articles.append({
-                        'title': entry.title,
-                        'summary': entry.get('summary', '')[:300], # 截取摘要
-                        'source': source_name
-                    })
-                    count += 1
-            
-            if count > 0:
-                stats[source_name] = count
-                print(f"  ✅ {source_name}: 获取 {count} 条")
-            else:
-                if feed.bozo:
-                    print(f"  ⚠️ {source_name}: 解析异常 (可能被拦截)")
-                else:
-                    print(f"  ⚠️ {source_name}: 0 条更新")
-                
-        except Exception as e:
-            print(f"  ❌ {source_url}: {e}")
-    
-    # 生成统计报告
-    if not stats:
-        stats_str = "⚠️ 本次未从任何源提取到新闻，可能是网络波动或源站反爬。"
-    else:
-        stats_str = "\n".join([f"- {name}: {cnt}条" for name, cnt in stats.items()])
-    
-    print(f"📊 总计获取 {len(articles)} 条有效新闻")
-    return articles[:60], stats_str
-
-def _call_ai(prompt: str, max_tokens: int) -> str:
-    """调用 DashScope API 生成内容"""
-    if not DASHSCOPE_API_KEY:
-        return "❌ 错误：未配置 DASHSCOPE_API_KEY，请在 GitHub Secrets 中设置。"
-    
-    system_prompt = """
-    你是一位【严谨的商业情报分析师】。
-    
-    **核心原则**：
-    1. **基于事实**：所有分析必须严格基于用户提供的【新闻素材】。如果不清楚，请忽略，严禁编造。
-    2. **禁止穿越**：素材中未提及日期的，默认是“过去24小时”。不要编造未来的日期。
-    3. **格式规范**：输出标准的 Markdown 格式。
-    """
-    
-    url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'
-    headers = {'Authorization': f'Bearer {DASHSCOPE_API_KEY}', 'Content-Type': 'application/json'}
-    payload = {
-        'model': 'qwen3-max',
-        'messages': [{'role': 'system', 'content': system_prompt}, {'role': 'user', 'content': prompt}],
-        'max_tokens': max_tokens + 2000,
-        'temperature': 0.2, # 低温度，保证 factual correctness
-        'enable_thinking': True,
-        'thinking_budget': 1024
-    }
-    
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=300)
-        resp_json = resp.json()
-        if 'choices' in resp_json:
-            return resp_json['choices'][0]['message']['content']
-        else:
-            print(f"AI Response Error: {resp_json}")
-            return "AI 生成返回格式异常"
-    except Exception as e:
-        print(f"AI Connection Error: {e}")
-        return "AI 生成服务暂时不可用"
-
-def generate_content(articles: List[Dict], stats_str: str) -> str:
-    print("✍️  正在生成文稿...")
-    
-    # === 熔断机制 ===
-    if not articles:
-        return f"""
-# 晨间猎手内参
-**{datetime.now().strftime('%Y年%m月%d日')}**
-
----
-
-## ⚠️ 今日暂停更新
-
-系统在过去 24 小时内未检测到有效新闻信号。
-可能原因：
-1. 节假日新闻源停更
-2. 网络连接异常
-3. 数据源反爬虫策略更新
-
-### 📊 系统诊断
-{stats_str}
-        """
-
-    week_days = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-    now = datetime.now()
-    date_str = now.strftime('%Y年%m月%d日')
-    weekday_str = week_days[now.weekday()]
-    
-    news_pool = ""
-    for i, a in enumerate(articles):
-        news_pool += f"{i+1}. [{a['source']}] {a['title']}\n摘要：{a['summary']}\n\n"
-    
-    prompt = f"""
-    今天是{date_str}，{weekday_str}。
-    请仅基于以下【新闻素材】，撰写一份晨间内参。
-    
-    **素材池：**
-    {news_pool}
-    
-    **写作要求：**
-    
-    ## 第一部分：全景扫描
-    （从素材中精选 8-10 条有价值的新闻。格式："- **来源**：具体内容"。）
-    
-    ## 第二部分：深度分析
-    （仅当素材中有足够信息支撑时，选出 1-3 个话题进行拆解。）
-    格式：
-    ### 话题一：[标题]
-    1. **现状**：(基于素材)
-    2. **猎手拆解**：
-       - **利益链条**：[谁在赚钱/亏钱？]
-       - **底层逻辑**：[政策或商业本质]
-    3. **搞钱路径**：
-       - **短线/中线**：[机会点]
-    
-    ---
-    
-    (文末附上)
-    ### 📊 本期数据源统计
-    {stats_str}
-    """
-    
-    return _call_ai(prompt, max_tokens=5000)
-
-async def generate_audio(text: str, output_path: str):
-    print(f"🎙️  正在生成音频...")
-    clean_text = clean_text_for_tts(text)
-    # 使用 Edge TTS，加 5% 语速
-    communicate = edge_tts.Communicate(clean_text, voice=VOICE_NAME, rate='+5%')
-    await communicate.save(output_path)
-
-def generate_rss(audio_url: str):
-    today = datetime.now().strftime('%Y-%m-%d')
-    content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0"><channel><title>晨间猎手</title><item><title>{today}</title>
-<enclosure url="{audio_url}" type="audio/mpeg" length="100000"/><guid>{today}</guid>
-</item></channel></rss>"""
-    with open(RSS_FILE, 'w') as f: f.write(content)
-
-# ========== 主程序入口 ==========
-
-def main():
-    print("🚀 启动任务 (GitHub Actions Mode)...")
-    try:
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        
-        # 1. 抓取 (带统计)
-        articles, stats_str = fetch_rss_articles()
-        
-        # 2. AI 写作
-        full_markdown = generate_content(articles, stats_str)
-        
-        # 3. 保存 Markdown
-        with open(MD_FILE, 'w', encoding='utf-8') as f:
-            f.write(full_markdown)
-            
-        # 4. 生成网页
-        generate_html_file(full_markdown, HTML_FILE, AUDIO_FILENAME)
-        
-        # 5. 生成音频
-        asyncio.run(generate_audio(full_markdown, AUDIO_FILE))
-        
-        # 6. 生成链接
-        if '/' in GITHUB_REPO:
-            username, repo_name = GITHUB_REPO.split('/')
-            page_url = f"https://{username}.github.io/{repo_name}/{OUTPUT_DIR}/briefing_{DATE_STR}.html"
-            rss_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/{OUTPUT_DIR}/{AUDIO_FILENAME}"
-        else:
-            page_url = "https://github.com"
-            rss_url = ""
-
-        generate_rss(rss_url)
-        
-        # 7. Bark 推送
-        summary = clean_text_for_tts(full_markdown)[:60]
-        if "暂停更新" in full_markdown: summary = "今日无有效新闻提取"
-        
-        send_bark_notification(
-            f"{datetime.now().strftime('%m月%d日')}晨间猎手", 
-            summary, 
-            click_url=page_url
-        )
-        
-        # 8. 清理
-        cleanup_old_files()
-        print("✅ 任务全部完成")
-        
-    except Exception as e:
-        print(f"❌ 严重错误: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    asyncio.run(main())
