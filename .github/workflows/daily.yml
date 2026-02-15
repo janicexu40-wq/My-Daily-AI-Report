@@ -2,56 +2,66 @@ name: Daily AI Morning Briefing
 
 on:
   schedule:
-    # 每天北京时间早上7点运行（UTC时间前一天23点）
-    - cron: '0 23 * * *'
-  
+    # UTC 22:30 = 北京 06:30，错峰运行避开整点队列，7点前必达
+    - cron: '30 22 * * *'
+
   # 允许手动触发测试
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
-    # 必须给写权限，否则无法提交生成的文件
+    timeout-minutes: 25  # 双模型流水线耗时较长，给足裕量；超时自动终止防止卡死
+
     permissions:
       contents: write
 
     steps:
-    - name: 📥 检出代码
-      uses: actions/checkout@v4
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
 
-    - name: 🐍 设置 Python 环境
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: 🐍 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: 📦 安装核心依赖
-      # 安装 dashscope (阿里云SDK), aligo (云盘), edge-tts (语音), lxml (解析OPML)
-      run: |
-        python -m pip install --upgrade pip
-        pip install feedparser requests edge-tts markdown dashscope aligo lxml
+      - name: 📦 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          # 新增 dashscope 完整依赖（MultiModalConversation 需要）
+          pip install feedparser requests edge-tts markdown dashscope aligo lxml
 
-    - name: 🚀 启动 J记财讯 (Aliyun All-in-One)
-      env:
-        # Qwen 和 Kimi 都通过这个 Key 调用
-        DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
-        # 阿里云盘和 Bark
-        ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
-        BARK_KEY: ${{ secrets.BARK_KEY }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-      run: |
-        # 运行核心 Python 脚本
-        python main.py
+      - name: 🚀 启动 J记财讯
+        id: run_briefing
+        env:
+          # Qwen3-Max + Kimi-K2.5 共用同一个阿里云 Key（北京地域）
+          DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+          ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python main.py
 
-    - name: 📤 同步变更到仓库
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        # 🟢 关键步骤：添加所有变更（包括 python 删除的旧文件）
-        git add .
-        
-        # 提交信息带上北京时间 (+8 hours)
-        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 J记财讯更新：$(date -d '+8 hours' +'%Y-%m-%d %H:%M')"
-        
-        git push
+      # ── 失败时立刻推送 Bark 报警，无需等到下次手动检查 ──
+      - name: 🚨 失败通知
+        if: failure()
+        run: |
+          curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/J记财讯运行失败/Qwen或Kimi调用异常，请检查Actions日志?group=J-Intel" || true
+
+      - name: 📤 同步变更到仓库
+        if: success()  # 只在主任务成功后才提交，避免提交半成品文件
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          # 清理3天前的旧文件（在 git add 之前删，让 git 感知到删除操作）
+          find output/ -name "briefing_*" -mtime +3 -delete 2>/dev/null || true
+
+          git add .
+
+          # 有变更才提交，北京时间戳
+          if git diff --staged --quiet; then
+            echo "✅ 无新变更，跳过提交"
+          else
+            git commit -m "🚀 J记财讯更新：$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M')"
+            git push
+          fi
