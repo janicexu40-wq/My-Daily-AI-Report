@@ -2,3 +2,4 @@ requests
 feedparser
 edge-tts
 aliyun-python-sdk-core
+dashscope
