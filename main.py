@@ -252,11 +252,39 @@ KIMI_PROMPT = """
 **Next Step**：24小时内可启动的具体动作，[极度具体，如"注册XX平台账号""整理你的技能清单""联系3个潜在客户"]。
 """
 
+def _extract_text(response) -> str:
+    """
+    兼容提取器：处理 Qwen3 不同 thinking 模式下的响应格式差异。
+    - thinking=False 时：内容在 output.text（有时为空）或 choices[0].message.content
+    - thinking=True  时：内容在 choices[0].message.content（可能是 list）
+    """
+    # 优先尝试 output.text（最常见）
+    text = getattr(getattr(response, 'output', None), 'text', None)
+    if text and text.strip():
+        return text.strip()
+
+    # 备用：output.choices[0].message.content
+    try:
+        content = response.output.choices[0].message.content
+        if isinstance(content, list):
+            # thinking 模式返回 list，取 type=="text" 的块
+            return "\n".join(
+                b.get("text", "") for b in content
+                if isinstance(b, dict) and b.get("type") == "text"
+            ).strip()
+        if content and str(content).strip():
+            return str(content).strip()
+    except (AttributeError, IndexError, TypeError):
+        pass
+
+    return ""
+
+
 def call_qwen_structure(context):
     """
     Stage 1: Qwen3-Max (结构猎手)
     负责全网 80 条新闻的初筛和 Top 15 撰写 + Deep Dive 草稿。
-    - enable_thinking=False：初筛任务不需要推理链，节省 token 和时间。
+    - enable_thinking 不传（让模型自动决定），避免部分 SDK 版本 output.text 为空的 bug。
     - 指数退避重试：最多 3 次，间隔 2/4/8 秒。
     """
     logger.info("🧠 [Stage 1] Qwen3-Max 正在构建骨架...")
@@ -269,12 +297,16 @@ def call_qwen_structure(context):
                 messages=[
                     {'role': 'system', 'content': QWEN_PROMPT},
                     {'role': 'user', 'content': f"今日情报素材池：\n{context}"}
-                ],
-                extra_body={"enable_thinking": False}  # 初筛不需要思考模式，省 token
+                ]
+                # ⚠️ 不传 enable_thinking：避免 thinking=False 时 output.text 为空的 SDK bug
             )
             if response.status_code == HTTPStatus.OK:
-                logger.info("✅ [Stage 1] Qwen3-Max 输出完成")
-                return response.output.text
+                text = _extract_text(response)
+                if text:
+                    logger.info(f"✅ [Stage 1] Qwen3-Max 输出完成 ({len(text)} 字)")
+                    return text
+                else:
+                    logger.warning(f"[Stage 1] Qwen 返回空内容 (attempt {attempt+1}/{MAX_RETRIES})，原始响应: {response.output}")
             else:
                 logger.warning(f"[Stage 1] Qwen 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
         except Exception as e:
@@ -295,7 +327,7 @@ def call_kimi_refine(draft_content):
     - 使用 MultiModalConversation 接口（Kimi-K2.5 的正确调用方式）。
     - enable_thinking=True：强制开启内部推演，先思考再输出，质量更高。
     - 地域限制：kimi-k2.5 仅支持中国大陆（北京）地域的 API Key。
-    - 降级策略：kimi-k2.5 失败 → qwen-plus 兜底（同接口）。
+    - 降级策略：kimi-k2.5 失败 → qwen-plus 兜底。
     - 指数退避重试：最多 3 次，间隔 2/4/8 秒。
     """
     logger.info("💎 [Stage 2] Kimi-K2.5 正在深度锐化（思考模式开启）...")
@@ -320,18 +352,15 @@ def call_kimi_refine(draft_content):
             response = MultiModalConversation.call(
                 model='kimi-k2.5',
                 messages=messages,
-                extra_body={"enable_thinking": True}   # 强制思考模式
+                extra_body={"enable_thinking": True}
             )
             if response.status_code == HTTPStatus.OK:
-                result_text = response.output.choices[0].message.content
-                # content 可能是 list（含 thinking block），取纯文本
-                if isinstance(result_text, list):
-                    result_text = "\n".join(
-                        block.get("text", "") for block in result_text
-                        if isinstance(block, dict) and block.get("type") == "text"
-                    )
-                logger.info("✅ [Stage 2] Kimi-K2.5 输出完成")
-                return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{result_text}"
+                result_text = _extract_text(response)
+                if result_text:
+                    logger.info(f"✅ [Stage 2] Kimi-K2.5 输出完成 ({len(result_text)} 字)")
+                    return f"### Part 2: 深度搞钱逻辑 (Deep Dive)\n\n{result_text}"
+                else:
+                    logger.warning(f"[Stage 2] Kimi-K2.5 返回空内容 (attempt {attempt+1}/{MAX_RETRIES})")
             else:
                 logger.warning(f"[Stage 2] Kimi-K2.5 错误 (attempt {attempt+1}/{MAX_RETRIES}): {response.message}")
         except Exception as e:
@@ -342,7 +371,7 @@ def call_kimi_refine(draft_content):
             logger.info(f"   ⏳ {wait}s 后重试...")
             time.sleep(wait)
 
-    # ── 降级：qwen-plus（Generation 接口，无需 MultiModal）────
+    # ── 降级：qwen-plus ──────────────────────────────────
     logger.warning("⚠️ [Stage 2] Kimi-K2.5 重试耗尽，降级使用 qwen-plus...")
     try:
         fallback_resp = Generation.call(
@@ -350,18 +379,17 @@ def call_kimi_refine(draft_content):
             messages=[
                 {"role": "system", "content": KIMI_PROMPT},
                 {"role": "user", "content": f"请参考范文风格，深度润色以下草稿：\n\n{draft_content}"}
-            ],
-            extra_body={"enable_thinking": False}
+            ]
         )
         if fallback_resp.status_code == HTTPStatus.OK:
-            logger.info("✅ [Stage 2] qwen-plus 降级成功")
-            return f"### Part 2: 深度搞钱逻辑 (Deep Dive · qwen-plus 降级版)\n\n{fallback_resp.output.text}"
-        else:
-            logger.error(f"[Stage 2] qwen-plus 降级也失败: {fallback_resp.message}")
+            text = _extract_text(fallback_resp)
+            if text:
+                logger.info("✅ [Stage 2] qwen-plus 降级成功")
+                return f"### Part 2: 深度搞钱逻辑 (Deep Dive · qwen-plus 降级版)\n\n{text}"
+        logger.error(f"[Stage 2] qwen-plus 降级失败: {fallback_resp.message}")
     except Exception as e:
         logger.error(f"[Stage 2] qwen-plus 降级异常: {e}")
 
-    # ── 最终兜底：返回原始草稿 ───────────────────────────
     logger.error("❌ [Stage 2] 所有模型失败，返回原始草稿")
     return f"### Part 2 (AI润色失败，原始草稿)\n\n{draft_content}"
 
