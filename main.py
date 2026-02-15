@@ -31,6 +31,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("J-Intel")
 
+# 🟢 1. 打印 SDK 版本 (用于调试环境确保支持 Kimi 思考模式)
+try:
+    logger.info(f"🔍 当前 DashScope SDK 版本: {dashscope.__version__}")
+except:
+    pass
+
 # 🟢 核心：强制锁定北京时间 (UTC+8)
 utc_now = datetime.utcnow()
 BEIJING_NOW = utc_now + timedelta(hours=8)
@@ -75,19 +81,22 @@ def get_rss_layers():
 
     return {
         "L1_Signal": {
-            "weight": 1, 
+            "weight": 2, 
             "urls": [
-                "https://rsshub.rssforever.com/wallstreetcn/live/global/2",
-                "https://rsshub.rssforever.com/cls/telegraph/red",
-                "https://rsshub.app/news/xhsxw"
+                # 🟢 核心快讯源 (已添加您指定的所有快讯源)
+                "https://rsshub.rssforever.com/wallstreetcn/live/global/2", # 华尔街见闻-快讯
+                "https://rsshub.rssforever.com/wallstreetcn/hot/day",      # 华尔街见闻-热榜 (新增)
+                "https://rsshub.rssforever.com/cls/telegraph/red",         # 财联社-电报
+                "https://rsshub.app/news/xhsxw"                            # 新华社 (保留作官方补充)
             ]
         },
         "L2_Industry": {
-            "weight": 3, 
+            "weight": 2, # 权重保持 2，防止单一媒体刷屏
             "urls": [
-                "https://36kr.com/feed",
-                "https://rsshub.app/huxiu/channel/103",
-                "https://rsshub.rssforever.com/yicai/headline"
+                # 🟢 核心行业源 (已添加第一财经)
+                "https://rsshub.rssforever.com/yicai/headline",            # 第一财经-头条
+                "https://36kr.com/feed",                                   # 36Kr
+                "https://rsshub.app/huxiu/channel/103"                     # 虎嗅
             ]
         },
         "L3_Tech": {
@@ -195,12 +204,13 @@ QWEN_PROMPT = f"""
 ### 任务一：撰写 Part 1 (Top 15)
 * **筛选标准**：高商业价值、技术突破、政策剧变、巨头动向。
 * **数量**：精选15条。
+* **来源要求**：**请尽可能选择不同的媒体来源，不要让单一媒体（如36氪、华尔街见闻）占据超过50%的内容。**
 * **格式**：每条控制在200字以内。
 * **内容结构**：
     - **【领域标签】** 总结原新闻内容（客观陈述，1-2句话）+ AI模型分析（搞钱指向，1-2句话）
     - **（消息来源：XX+日期）**
 * **风格要求**：
-    - 电头：**J记财讯 | 北京{datetime.now().strftime('%m月%d日')}电**
+    - **开头固定格式**：**今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}，一起了解过去24小时新闻。**
     - 前半部分：客观总结原新闻，不掺杂分析
     - 后半部分：AI模型基于事实的冷峻分析，必须带**搞钱指向**——谁受影响 + 该做什么
     - 时效词：内测/刚刚/紧急/48小时内/窗口期/首当其冲
@@ -214,6 +224,8 @@ QWEN_PROMPT = f"""
 
 ### Part 1: 全球热点速递 (Top 15)
 (请按以下范例格式输出 15 条)
+**今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}，一起了解过去24小时新闻。**
+
 > 【AI】OpenAI官方博客2月14日发布，GPT-5已进入灰度测试阶段，新增视频生成功能。该技术将降低影视内容制作门槛，传统外包报价模式承压。短视频剪辑师、影视外包公司首当其冲，需48小时内评估技能升级路径或转向创意策划层，避免被工具替代。（消息来源：OpenAI官方博客2月14日）
 
 ===SPLIT===
@@ -252,29 +264,38 @@ KIMI_PROMPT = """
 **Next Step**：24小时内可启动的具体动作，[极度具体，如"注册XX平台账号""整理你的技能清单""联系3个潜在客户"]。
 """
 
+# 🟢 2. 修复：_extract_text 函数 (核心修复)
 def _extract_text(response) -> str:
     """
-    兼容提取器：处理 Qwen3 不同 thinking 模式下的响应格式差异。
-    - thinking=False 时：内容在 output.text（有时为空）或 choices[0].message.content
-    - thinking=True  时：内容在 choices[0].message.content（可能是 list）
+    兼容提取器：处理 Qwen3/Kimi 不同 thinking 模式下的响应格式差异。
+    修复说明：Kimi 有时返回不含 'type' 字段的 block，此处增加默认处理。
     """
-    # 优先尝试 output.text（最常见）
+    # 1. 优先尝试 output.text（Qwen 非 thinking 模式常见）
     text = getattr(getattr(response, 'output', None), 'text', None)
-    if text and text.strip():
-        return text.strip()
+    if text and str(text).strip():
+        return str(text).strip()
 
-    # 备用：output.choices[0].message.content
+    # 2. 处理 choices[0].message.content
     try:
         content = response.output.choices[0].message.content
+        
+        # 情况 A: 内容是列表 (Kimi thinking=True 或 Qwen thinking=True)
         if isinstance(content, list):
-            # thinking 模式返回 list，取 type=="text" 的块
-            return "\n".join(
-                b.get("text", "") for b in content
-                if isinstance(b, dict) and b.get("type") == "text"
-            ).strip()
+            parts = []
+            for b in content:
+                if isinstance(b, dict):
+                    # 🟢 核心修复：如果不含 type 字段，默认视为 "text"；如果含 type，必须不是 "thinking"
+                    block_type = b.get("type", "text") 
+                    if block_type == "text":
+                        parts.append(str(b.get("text", "")))
+            return "\n".join(parts).strip()
+            
+        # 情况 B: 内容直接是字符串
         if content and str(content).strip():
             return str(content).strip()
-    except (AttributeError, IndexError, TypeError):
+            
+    except (AttributeError, IndexError, TypeError, Exception) as e:
+        logger.debug(f"解析提取文本失败: {e}")
         pass
 
     return ""
