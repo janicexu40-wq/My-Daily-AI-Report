@@ -174,8 +174,19 @@ def fetch_single_feed(url, layer_name, base_weight):
                         "source": feed.feed.get('title', 'Unknown')
                     })
     except Exception as e:
-        pass 
+        logger.warning(f"⚠️ 采集失败 [{layer_name}] {url[:60]}: {e}")
     return items
+
+def _dedup_items(items):
+    """按标题去重，同标题保留分数最高的那条（借鉴 Intel Briefing）"""
+    seen = {}
+    for item in items:
+        title = item.get('title', '').strip().lower()
+        if not title:
+            continue
+        if title not in seen or item['score'] > seen[title]['score']:
+            seen[title] = item
+    return list(seen.values())
 
 def fetch_all_data():
     logger.info("🚀 启动全层级情报扫描...")
@@ -190,7 +201,13 @@ def fetch_all_data():
         
         for future in concurrent.futures.as_completed(futures):
             all_news.extend(future.result())
-            
+
+    before = len(all_news)
+    all_news = _dedup_items(all_news)
+    after = len(all_news)
+    if before > after:
+        logger.info(f"🔍 去重：{before} → {after} 条（移除 {before - after} 条重复）")
+
     all_news.sort(key=lambda x: x['score'], reverse=True)
     logger.info(f"✅ 采集完成，筛选出 {len(all_news)} 条高价值情报")
     return all_news
@@ -204,9 +221,9 @@ QWEN_PROMPT = f"""
 ## Task
 你是流水线的第一环。请根据今日素材，完成两项任务：
 
-### 任务一：撰写 Part 1 (Top 15)
+### 任务一：撰写 Part 1 (Top 20)
 * **筛选标准**：高商业价值、技术突破、政策剧变、巨头动向。
-* **数量**：精选15条。
+* **数量**：精选20条。
 * **来源要求**：**请尽可能选择不同的媒体来源，不要让单一媒体（如36氪、华尔街见闻）占据超过50%的内容。**
 * **格式**：每条控制在200字以内。
 * **内容结构**：
@@ -225,8 +242,8 @@ QWEN_PROMPT = f"""
 ## Output Format (严格遵守)
 请用 "===SPLIT===" 将两部分隔开。
 
-### Part 1: 全球热点速递 (Top 15)
-(请按以下范例格式输出 15 条)
+### Part 1: 全球热点速递 (Top 20)
+(请按以下范例格式输出 20 条)
 **今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}，一起了解过去24小时新闻。**
 
 > 【AI】OpenAI官方博客2月14日发布，GPT-5已进入灰度测试阶段，新增视频生成功能。该技术将降低影视内容制作门槛，传统外包报价模式承压。短视频剪辑师、影视外包公司首当其冲，需48小时内评估技能升级路径或转向创意策划层，避免被工具替代。（消息来源：OpenAI官方博客2月14日）
@@ -472,22 +489,50 @@ def dual_model_pipeline(news_items):
     # 3. 拆分 Qwen 输出
     parts = qwen_output.split("===SPLIT===")
     if len(parts) == 2:
-        part1_top15 = parts[0].strip()
+        part1_top20 = parts[0].strip()
         part2_draft = parts[1].strip()
     else:
-        part1_top15 = qwen_output
+        part1_top20 = qwen_output
         part2_draft = "（Qwen未正确输出分隔符，请查看原始日志）"
 
     # 4. Kimi: 深度润色 Part 2
     part2_final = call_kimi_refine(part2_draft)
 
     # 5. 组合
-    return f"# J记财讯 ({DISPLAY_DATE})\n\n{part1_top15}\n\n---\n\n{part2_final}"
+    return f"# J记财讯 ({DISPLAY_DATE})\n\n{part1_top20}\n\n---\n\n{part2_final}"
 
 # ================= 5. 生成交付物 =================
 
 def generate_rss(audio_url):
     logger.info("📡 正在生成 RSS Feed...")
+
+    # 读取已有条目（追加模式，保留历史播客，播客客户端可订阅完整历史）
+    existing_items = []
+    if os.path.exists(RSS_FILE):
+        try:
+            tree = ET.parse(RSS_FILE)
+            root = tree.getroot()
+            channel = root.find('channel')
+            if channel is not None:
+                for item in channel.findall('item'):
+                    guid = item.findtext('guid', '')
+                    if guid != DATE_STR:  # 跳过今天的旧条目（本次重新写入）
+                        existing_items.append(ET.tostring(item, encoding='unicode'))
+        except Exception as e:
+            logger.warning(f"⚠️ 读取旧 RSS 失败（将重建）: {e}")
+
+    existing_items = existing_items[:29]  # 最多保留 30 天
+
+    today_item = f"""    <item>
+        <title>{DISPLAY_DATE} 情报内参</title>
+        <description>J记财讯每日更新 · {DISPLAY_WEEKDAY}</description>
+        <pubDate>{datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
+        <enclosure url="{audio_url}" type="audio/mpeg" length="100000"/>
+        <guid>{DATE_STR}</guid>
+    </item>"""
+
+    all_items_str = today_item + ("\n" + "\n".join(existing_items) if existing_items else "")
+
     rss_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
 <channel>
@@ -495,18 +540,12 @@ def generate_rss(audio_url):
     <description>每日商业情报内参</description>
     <link>https://github.com/{GITHUB_REPO}</link>
     <lastBuildDate>{datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}</lastBuildDate>
-    <item>
-        <title>{DISPLAY_DATE} 情报内参</title>
-        <description>J记财讯每日更新</description>
-        <pubDate>{datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}</pubDate>
-        <enclosure url="{audio_url}" type="audio/mpeg" length="100000"/>
-        <guid>{DATE_STR}</guid>
-    </item>
+{all_items_str}
 </channel>
 </rss>"""
     with open(RSS_FILE, 'w', encoding='utf-8') as f:
         f.write(rss_content)
-    logger.info(f"✅ RSS 已生成: {RSS_FILE}")
+    logger.info(f"✅ RSS 已生成: {RSS_FILE}（共 {1 + len(existing_items)} 条）")
 
 async def generate_assets(content):
     if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
@@ -557,7 +596,7 @@ async def generate_assets(content):
     
     tts_text = clean_text_for_tts(content)
     intro = f"今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}。欢迎收听J记财讯。\n\n"
-    final_tts_text = intro + tts_text[:2500] 
+    final_tts_text = intro + tts_text[:3500]  # 20条内容更多，上限调至3500字
     
     communicate = edge_tts.Communicate(final_tts_text, "zh-CN-YunxiNeural", rate="+10%")
     await communicate.save(AUDIO_FILE)
