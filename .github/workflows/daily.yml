@@ -40,7 +40,6 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         # 运行核心 Python 脚本
-        # 流程：采集 -> 评分 -> AI分析 -> 生成(TTS清洗) -> 上传云盘 -> 本地删除旧文件
         python main.py
 
     - name: 📤 同步变更到仓库
@@ -49,7 +48,6 @@ jobs:
         git config --local user.name "GitHub Action"
         
         # 🟢 关键步骤：git add . 会自动处理 新增、修改 和 删除 的文件
-        # 这让 Python 脚本执行的 "os.remove" 能够同步到 GitHub 仓库
         git add .
         
         # 提交信息带上北京时间 (+8 hours)
