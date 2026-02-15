@@ -210,7 +210,7 @@ def fetch_all_data():
     logger.info(f"✅ 采集完成，筛选出 {len(all_news)} 条高价值情报")
     return all_news
 
-# ================= 4. J记财讯 AI 分析 =================
+# ================= 4. J记财讯 AI 分析 (新 Prompt) =================
 
 J_PROMPT = f"""
 # Role: "J记财讯" 首席商业情报分析师
@@ -224,39 +224,43 @@ J_PROMPT = f"""
 
 ## Constraints & Principles
 1. **时效性**：仅关注过去24小时内的情报，严禁穿越历史。
-2. **真实性**：严格基于事实，禁止编造。
-3. **去重合并**：对相似新闻进行合并。
-4. **风格**：冷峻、客观、实用、直接。拒绝正确的废话。
+2. **真实性**：严格基于事实，禁止编造。若是预测，必须显式标注“*基于当前数据的推测*”。
+3. **去重合并**：对相似新闻进行合并，提取核心增量信息。
+4. **风格**：冷峻、客观、实用、直接、行动导向。拒绝正确的废话，拒绝煽情。
+5. **输出限制**：严格遵守字数限制。
 
 ## Workflow
-请基于提供的【素材池】，输出以下两部分：
+你需要处理输入的信息（或自行检索今日热点），并按以下两个部分输出：
 
 ### Part 1: 全球热点速递 (Top 10)
 * **筛选标准**：高商业价值、技术突破、政策剧变、巨头动向。
+* **数量**：精选10条。
 * **格式**：每条控制在150字以内。
 * **内容**：一句话讲清发生了什么 + 对行业/搞钱的直接影响。
 
 ### Part 2: 深度搞钱逻辑 (Deep Dive)
-* **筛选**：从热点中嗅出“钱味”最浓的 1-3 个话题。
+* **筛选**：从上述热点中，嗅出“钱味”最浓的 1-3 个话题。
 * **思维模型 (作为内核)**：
-  1. 焦虑信号：谁在焦虑？流量去哪了？
-  2. 掘金铲子：定位生态位，找蓝海。
-* **输出结构 (必须严格按此格式)**：
-
-#### 标题：[核心机会/痛点] - [具体的搞钱方向]
-
-**1. 表象与真相 (Phenomenon)**
-* 简述新闻表象。
-* 揭示背后的流量流向和焦虑人群（谁在买单？）。
-
-**2. 机遇与风险辩证 (Analysis)**
-* **生态位分析**：当前处于产业链的哪个环节？
-* **红海警示**：明确指出哪些方向已经过热。
-* **蓝海判断**：指出真正的缺口在哪里。
-
-**3. 搞钱路径 (Actionable Path)**
-* **行动建议**：(如：开发插件/制作SOP/搬运信息差)
-* **Next Step**：给读者的第一步执行指令。
+    1. 焦虑信号 (Signal)：忽略情绪，看流量流向哪里？谁在焦虑（新手/老手/企业主）？哪里有海量新人涌入但基建简陋？
+    2. 掘金铲子 (Shovel)：定位生态位（上/中/下游）。哪里是红海（避坑）？哪里是蓝海（机会）？
+* **输出结构 (必须按此格式输出)**：
+    * 每条分析控制在 1000 字以内，采用议论文格式。
+    
+    #### 标题：[核心机会/痛点] - [具体的搞钱方向]
+    
+    **1. 表象与真相 (Phenomenon)**
+    * 简述新闻表象。
+    * 揭示背后的流量流向和焦虑人群（谁在买单？）。
+    
+    **2. 机遇与风险辩证 (Analysis)**
+    * **生态位分析**：当前处于产业链的哪个环节？
+    * **红海警示**：明确指出哪些方向已经过热，不可触碰。
+    * **蓝海判断**：基于“供需不平衡”原理，指出真正的缺口在哪里。
+    
+    **3. 搞钱路径 (Actionable Path)**
+    * 基于今日情报，给出极度具体的行动建议。
+    * 格式参考：*开发某类插件 / 制作某类SOP教程 / 提供某类数据清洗服务 / 搬运某类信息差*。
+    * **Next Step**：给读者的第一步执行指令。
 """
 
 def analyze_with_ai(news_items):
@@ -286,7 +290,7 @@ def analyze_with_ai(news_items):
         logger.error(f"AI Error: {e}")
         return "❌ 分析系统发生错误"
 
-# ================= 5. 生成交付物 (Markdown, HTML, Audio) =================
+# ================= 5. 生成交付物 (修复了之前的截断错误) =================
 
 async def generate_assets(content):
     if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
@@ -297,6 +301,7 @@ async def generate_assets(content):
     
     # 2. 生成 HTML (移动端适配)
     html_body = markdown.markdown(content)
+    # 使用 f-string 生成 HTML，注意三引号完整性
     html_template = f"""
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -310,4 +315,100 @@ async def generate_assets(content):
             h1 {{ font-size: 24px; color: #000; margin-bottom: 5px; }}
             .date {{ color: #8e8e93; font-size: 14px; margin-bottom: 25px; }}
             h2 {{ margin-top: 35px; padding-bottom: 10px; border-bottom: 2px solid #007aff; color: #007aff; }}
-            h4 {{ background: #f2f2f
+            h4 {{ background: #f2f2f7; padding: 12px; border-radius: 8px; margin-top: 25px; border-left: 5px solid #34c759; }}
+            strong {{ color: #3a3a3c; font-weight: 700; }}
+            audio {{ width: 100%; margin: 20px 0; border-radius: 30px; }}
+            li {{ margin-bottom: 10px; line-height: 1.6; }}
+            .footer {{ text-align: center; margin-top: 40px; color: #c7c7cc; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🦁 J记财讯 · 商业内参</h1>
+            <div class="date">📅 {DISPLAY_DATE} {DISPLAY_WEEKDAY} | 📍 Beijing Time</div>
+            
+            <div style="background:#e5f1ff; padding:15px; border-radius:10px; margin-bottom:20px;">
+                <strong>🎧 语音播报：</strong>
+                <audio controls src="briefing_{DATE_STR}.mp3"></audio>
+            </div>
+            
+            {html_body}
+            
+            <div class="footer">Powered by J-Intel System | Data: Global RSS</div>
+        </div>
+    </body>
+    </html>
+    """
+    with open(HTML_FILE, 'w', encoding='utf-8') as f: f.write(html_template)
+    logger.info(f"🌐 HTML 保存: {HTML_FILE}")
+    
+    # 3. 生成 MP3 (使用清洗后的纯文本)
+    tts_text = clean_markdown_for_tts(content)
+    # 增加头部引导语
+    intro = f"今天是{DISPLAY_DATE}，{DISPLAY_WEEKDAY}。欢迎收听J记财讯。\n\n"
+    final_tts_text = intro + tts_text[:2500] # 限制长度防止超时
+    
+    communicate = edge_tts.Communicate(final_tts_text, "zh-CN-YunxiNeural", rate="+10%")
+    await communicate.save(AUDIO_FILE)
+    logger.info(f"🎙️ MP3 保存: {AUDIO_FILE}")
+    
+    return [MD_FILE, HTML_FILE, AUDIO_FILE]
+
+# ================= 6. 云端归档与本地清理 =================
+
+def upload_and_cleanup(files):
+    # 1. 阿里云盘上传
+    if ALIYUN_TOKEN:
+        try:
+            logger.info("☁️ 连接阿里云盘...")
+            ali = Aligo(level=logging.ERROR, refresh_token=ALIYUN_TOKEN)
+            remote_folder = ali.get_folder_by_path('/晨间情报')
+            if not remote_folder:
+                ali.create_folder('/晨间情报')
+                remote_folder = ali.get_folder_by_path('/晨间情报')
+            
+            for f in files:
+                ali.upload_file(f, remote_folder.file_id)
+                logger.info(f"   ⬆️ 上传成功: {os.path.basename(f)}")
+            logger.info("✅ 云盘备份完成")
+        except Exception as e:
+            logger.error(f"❌ 云盘上传失败: {e}")
+    else:
+        logger.warning("⚠️ 未配置 ALIYUN_REFRESH_TOKEN，跳过上传")
+
+    # 2. 本地清理 (保留最近3天 - 基于文件名日期)
+    logger.info("🧹 执行本地清理 (保留3天)...")
+    
+    # 计算3天前的截止日期 (北京时间)
+    cutoff_date = BEIJING_NOW - timedelta(days=3)
+    cutoff_str = cutoff_date.strftime('%Y%m%d')
+    
+    for f in glob.glob(os.path.join(OUTPUT_DIR, '*')):
+        filename = os.path.basename(f)
+        # 提取文件名中的日期 briefing_20260216.md
+        match = re.search(r'(\d{8})', filename)
+        if match:
+            file_date_str = match.group(1)
+            # 如果文件日期 < 截止日期，则删除
+            if file_date_str < cutoff_str:
+                try:
+                    os.remove(f)
+                    logger.info(f"   🗑️ 删除旧文件: {filename}")
+                except: pass
+
+# ================= 主程序入口 =================
+
+if __name__ == "__main__":
+    # 1. 采集
+    news_data = fetch_all_data()
+    
+    # 2. 分析
+    report_content = analyze_with_ai(news_data)
+    
+    # 3. 生成文件
+    generated_files = asyncio.run(generate_assets(report_content))
+    
+    # 4. 备份与清理
+    upload_and_cleanup(generated_files)
+    
+    logger.info("🎉 J记财讯任务圆满完成")
