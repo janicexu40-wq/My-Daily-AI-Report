@@ -1,5 +1,7 @@
-requests
 feedparser
+requests
 edge-tts
+markdown
 dashscope
 aligo
+lxml
