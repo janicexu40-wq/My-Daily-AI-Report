@@ -2,7 +2,7 @@ name: Daily AI Morning Briefing
 
 on:
   schedule:
-    # UTC 22:30 = 北京 06:30，错峰运行避开整点队列，7点前必达
+    # UTC 22:30 = 北京 06:30，错峰运行
     - cron: '30 22 * * *'
 
   # 允许手动触发测试
@@ -11,8 +11,9 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 25  # 双模型流水线耗时较长，给足裕量；超时自动终止防止卡死
-
+    timeout-minutes: 25  # 双模型流水线耗时较长，给足裕量
+    
+    # 必须赋予写权限，否则无法 git push
     permissions:
       contents: write
 
@@ -28,37 +29,41 @@ jobs:
       - name: 📦 安装依赖
         run: |
           python -m pip install --upgrade pip
-          # 新增 dashscope 完整依赖（MultiModalConversation 需要）
-          pip install feedparser requests edge-tts markdown dashscope aligo lxml
+          # 🟢 关键修改：加上 --upgrade 确保 dashscope 是最新版 (支持 Kimi 思考模式)
+          pip install --upgrade dashscope feedparser requests edge-tts markdown aligo lxml
 
       - name: 🚀 启动 J记财讯
         id: run_briefing
         env:
-          # Qwen3-Max + Kimi-K2.5 共用同一个阿里云 Key（北京地域）
+          # 环境变量映射
           DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
           ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python main.py
 
-      # ── 失败时立刻推送 Bark 报警，无需等到下次手动检查 ──
+      # ── 失败时立刻推送 Bark 报警 ──
       - name: 🚨 失败通知
         if: failure()
         run: |
-          curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/J记财讯运行失败/Qwen或Kimi调用异常，请检查Actions日志?group=J-Intel" || true
+          # 使用 curl 发送 GET 请求，失败不中断流程 (|| true)
+          curl -s "https://api.day.app/${{ secrets.BARK_KEY }}/J记财讯运行失败/请检查GitHubActions日志?group=J-Intel" || true
 
       - name: 📤 同步变更到仓库
-        if: success()  # 只在主任务成功后才提交，避免提交半成品文件
+        if: success()  # 只有主程序成功才提交
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-          # 清理3天前的旧文件（在 git add 之前删，让 git 感知到删除操作）
-          find output/ -name "briefing_*" -mtime +3 -delete 2>/dev/null || true
-
+          # 🔴 删除解释：删除了这里的 `find ... -delete` 命令。
+          # 原因：GitHub Action 每次都是重新 Clone 代码，文件的“修改时间”都是当前时间，
+          # 所以 `find -mtime +3` 永远找不到3天前的文件。
+          # 您的 main.py 中已经写了 `upload_and_cleanup` 函数，它会删除旧文件。
+          # git add . 会自动把 python 删掉的文件记录为 "deleted"，无需此处手动处理。
+          
           git add .
 
-          # 有变更才提交，北京时间戳
+          # 检查是否有变更（新生成的文件 或 python脚本删除的旧文件）
           if git diff --staged --quiet; then
             echo "✅ 无新变更，跳过提交"
           else
