@@ -1,0 +1,30 @@
+name: Manual Key Test
+
+# 设置为手动触发 (workflow_dispatch)，这样不会自动运行，必须你点按钮才跑
+on:
+  workflow_dispatch:
+
+jobs:
+  test-api-key:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        pip install dashscope
+        # 如果您的脚本还有其他依赖，可以在这里加，但 dashscope 是必须的
+
+    - name: Run Test Script
+      env:
+        # 这里会自动读取您仓库 Settings 里配置好的密钥
+        DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      run: |
+        python test_kimi.py
