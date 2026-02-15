@@ -83,3 +83,11 @@ graph TD
         M & N --> O[☁️ 上传阿里云盘];
         O --> P[🧹 清理 GitHub 旧文件];
     end
+🚀 快速部署1
+. Fork 本仓库点击右上角的 Fork 按钮，将项目复制到你的 GitHub 账号下。
+2. 配置 Secrets进入仓库 Settings -> Secrets and variables -> Actions，添加以下密钥：
+密钥名称说明获取方式DASHSCOPE_API_KEY阿里云百炼大模型 API阿里云官网ALIYUN_REFRESH_TOKEN阿里云盘上传凭证使用 aligo 获取BARK_KEY(可选) iPhone 推送密钥App Store 下载 Bark
+3. 上传 OPML (可选)如果你有自己的 RSS 订阅列表，将其导出为 hn_popular_blogs_2025.opml 并上传到仓库根目录，系统会自动读取其中的博客源。
+4. 手动运行测试进入 Actions 页面，选择 Daily AI Morning Briefing，点击 Run workflow。
+📂 输出示例每天运行后，你将在阿里云盘 /晨间情报 文件夹看到：📄 briefing_20260216.md (深度文字版)🌐 briefing_20260216.html (手机适配版网页)🎧 briefing_20260216.mp3 (10分钟语音版)
+🤝 致谢与协议核心灵感：Intel Briefing语音支持：edge-tts网盘工具：aligo本项目遵循 MIT 协议开源。
