@@ -12,7 +12,7 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     
-    # 必须给写权限，否则无法 push 回仓库
+    # 必须给写权限，否则无法提交生成的文件
     permissions:
       contents: write
 
@@ -25,19 +25,22 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: 📦 安装依赖
+    - name: 📦 安装核心依赖
+      # 安装 aligo(云盘), markdown(网页), edge-tts(语音), feedparser(RSS), lxml(解析OPML)
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install feedparser requests edge-tts markdown dashscope aligo lxml
 
-    - name: 🚀 启动晨间猎手 (生成 -> 上传 -> 清理)
+    - name: 🚀 启动 J记财讯
       env:
-        # 传递所有必要的密钥
+        # 传递密钥给 main.py
         DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
         BARK_KEY: ${{ secrets.BARK_KEY }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         # 运行核心 Python 脚本
+        # 流程：采集 -> 评分 -> AI分析 -> 生成(TTS清洗) -> 上传云盘 -> 本地删除旧文件
         python main.py
 
     - name: 📤 同步变更到仓库
@@ -45,10 +48,11 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 关键步骤：添加所有变更（包括 python 脚本删除的文件）
+        # 🟢 关键步骤：git add . 会自动处理 新增、修改 和 删除 的文件
+        # 这让 Python 脚本执行的 "os.remove" 能够同步到 GitHub 仓库
         git add .
         
-        # 核心修改：在提交信息中加入 (+8 hours) 的北京时间
-        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 自动更新：生成新情报并清理旧文件 $(date -d '+8 hours' +'%Y-%m-%d %H:%M')"
+        # 提交信息带上北京时间 (+8 hours)
+        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 J记财讯更新：$(date -d '+8 hours' +'%Y-%m-%d %H:%M')"
         
         git push
