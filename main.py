@@ -4,7 +4,8 @@ import feedparser
 import edge_tts
 import glob
 import logging
-from datetime import datetime, timedelta # 引入 timedelta 用于时区修正
+import time
+from datetime import datetime, timedelta
 from http import HTTPStatus
 import dashscope
 from aligo import Aligo
@@ -98,4 +99,118 @@ def upload_to_aliyun_drive(file_paths):
         ali = Aligo(level=logging.INFO, refresh_token=refresh_token)
         
         # 获取或创建目标文件夹
-        remote_
+        remote_folder = ali.get_folder_by_path('/晨间情报')
+        if not remote_folder:
+            ali.create_folder('/晨间情报')
+            remote_folder = ali.get_folder_by_path('/晨间情报')
+
+        # 批量上传
+        for file_path in file_paths:
+            if os.path.exists(file_path):
+                print(f"   ⬆️ 正在上传: {os.path.basename(file_path)}")
+                ali.upload_file(file_path, remote_folder.file_id)
+        
+        print("✅ 所有文件已备份至阿里云盘！")
+    except Exception as e:
+        print(f"❌ 上传失败 (不影响本地生成): {e}")
+
+def cleanup_old_files(output_dir="output", days_to_keep=3):
+    """清理 GitHub 本地超过 3 天的旧文件"""
+    print("🧹 [扫地僧] 开始清理 GitHub 本地旧文件...")
+    now = time.time()
+    cutoff = now - (days_to_keep * 86400)
+    
+    if not os.path.exists(output_dir):
+        return
+
+    files = glob.glob(os.path.join(output_dir, "*"))
+    for f in files:
+        if os.path.basename(f).startswith("."): continue # 跳过隐藏文件
+        
+        # 检查文件修改时间
+        if os.stat(f).st_mtime < cutoff:
+            try:
+                os.remove(f)
+                print(f"   🗑️ 已删除过期文件: {os.path.basename(f)}")
+            except Exception as e:
+                print(f"   ❌ 删除失败: {e}")
+
+# ================= 4. 主程序入口 =================
+
+async def main():
+    
+    # 🟢 关键修改：强制使用北京时间 (UTC+8)
+    beijing_time = datetime.utcnow() + timedelta(hours=8)
+    today_str = beijing_time.strftime("%Y%m%d")
+    
+    print(f"📅 当前北京时间: {beijing_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    output_dir = "output"
+    if not os.path.exists(output_dir): os.makedirs(output_dir)
+
+    # 1. 抓取与分析
+    print("🚀 晨间猎手任务启动...")
+    signals = fetch_rss_intel("signals")
+    shovels = fetch_rss_intel("shovels")
+    macro = fetch_rss_intel("macro")
+    full_intel = f"=== 焦虑信号 ===\n{signals}\n=== 掘金铲子 ===\n{shovels}\n=== 宏观风向 ===\n{macro}"
+    
+    report = analyze_with_hunter_ai(full_intel)
+    
+    # 2. 生成文件
+    files_to_upload = []
+
+    # [MD] Markdown 原文
+    md_path = os.path.join(output_dir, f"briefing_{today_str}.md")
+    with open(md_path, "w", encoding="utf-8") as f: f.write(report)
+    files_to_upload.append(md_path)
+    print(f"✅ MD生成完毕: {md_path}")
+
+    # [MP3] 语音播报
+    mp3_path = os.path.join(output_dir, f"briefing_{today_str}.mp3")
+    tts_text = report[:1000] 
+    communicate = edge_tts.Communicate(tts_text, "zh-CN-YunxiNeural")
+    await communicate.save(mp3_path)
+    files_to_upload.append(mp3_path)
+    print(f"✅ MP3生成完毕: {mp3_path}")
+
+    # [HTML] 手机适配版网页
+    html_path = os.path.join(output_dir, f"briefing_{today_str}.html")
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>晨间猎手内参 {today_str}</title>
+        <style>
+            body {{ font-family: -apple-system, sans-serif; padding: 20px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: #f4f4f5; }}
+            .card {{ background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+            h1 {{ color: #1a1a1a; font-size: 1.5rem; }}
+            audio {{ width: 100%; margin: 15px 0; }}
+            pre {{ white-space: pre-wrap; word-wrap: break-word; font-size: 15px; color: #333; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>🕵️‍♂️ 晨间猎手内参 ({today_str})</h1>
+            <p>📅 {beijing_time.strftime('%Y-%m-%d')}</p>
+            <audio controls src="briefing_{today_str}.mp3"></audio>
+            <hr>
+            <pre>{report}</pre>
+        </div>
+    </body>
+    </html>
+    """
+    with open(html_path, "w", encoding="utf-8") as f: f.write(html_content)
+    files_to_upload.append(html_path)
+    print(f"✅ HTML生成完毕: {html_path}")
+
+    # 3. ☁️ 云端归档
+    upload_to_aliyun_drive(files_to_upload)
+
+    # 4. 🧹 本地清理
+    cleanup_old_files(output_dir, days_to_keep=3)
+
+if __name__ == "__main__":
+    asyncio.run(main())
