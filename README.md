@@ -68,7 +68,6 @@
 本项目遵循 MIT 协议开源。
 
 ---
-
 ## 🛠️ 技术架构
 
 ```mermaid
@@ -100,28 +99,3 @@ graph TD
         M & N --> O[☁️ 上传阿里云盘];
         O --> P[🧹 清理 GitHub 旧文件];
     end
-
-
-## 🚀 快速部署
-
-### 1. Fork 本仓库
-点击右上角的 **Fork** 按钮，将项目复制到你的 GitHub 账号下。
-
-### 2. 配置 Secrets
-进入仓库 `Settings` -> `Secrets and variables` -> `Actions`，添加以下密钥：
-
-| 密钥名称 | 说明 | 获取方式 |
-| :--- | :--- | :--- |
-| `DASHSCOPE_API_KEY` | 阿里云百炼大模型 API | [阿里云百炼平台](https://dashscope.console.aliyun.com/) |
-| `ALIYUN_REFRESH_TOKEN` | 阿里云盘上传凭证 | 使用 [aligo](https://github.com/wxy247/aligo) 获取 |
-| `BARK_KEY` | (可选) iPhone 推送密钥 | App Store 下载 [Bark](https://apps.apple.com/us/app/bark-customed-notifications/id1403753865) |
-
-### 3. 上传 OPML (可选)
-如果你有自己的 RSS 订阅列表，将其导出为 `hn_popular_blogs_2025.opml` 并上传到仓库根目录，系统会自动读取其中的博客源。
-
-### 4. 手动运行测试
-进入 `Actions` 页面，选择 `Daily AI Morning Briefing`，点击 **Run workflow**。
-
----
-
-
