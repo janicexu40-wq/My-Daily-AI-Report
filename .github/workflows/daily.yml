@@ -12,8 +12,9 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     
+    # 必须给写权限，否则无法 push 回仓库
     permissions:
-      contents: write  #以此权限提交生成的文件
+      contents: write
 
     steps:
     - name: 📥 检出代码
@@ -25,19 +26,18 @@ jobs:
         python-version: '3.11'
 
     - name: 📦 安装依赖
-      # 直接读取 requirements.txt，确保和本地环境一致
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
     - name: 🚀 启动晨间猎手 (生成 -> 上传 -> 清理)
       env:
-        # 必须把所有密钥都传给 main.py
+        # 传递所有必要的密钥
         DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
         ALIYUN_REFRESH_TOKEN: ${{ secrets.ALIYUN_REFRESH_TOKEN }}
         BARK_KEY: ${{ secrets.BARK_KEY }}
       run: |
-        # 运行核心脚本，所有的逻辑都在这里面完成了
+        # 运行核心 Python 脚本
         python main.py
 
     - name: 📤 同步变更到仓库
@@ -45,9 +45,10 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        # 关键：git add . 会自动识别 Python 脚本删除的文件
+        # 关键步骤：添加所有变更（包括 python 脚本删除的文件）
         git add .
         
-        # 只有当有文件变动（有新文件或有文件被删）时才提交
-        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 自动更新：生成新情报并清理旧文件"
+        # 核心修改：在提交信息中加入 (+8 hours) 的北京时间
+        git diff --quiet && git diff --staged --quiet || git commit -m "🚀 自动更新：生成新情报并清理旧文件 $(date -d '+8 hours' +'%Y-%m-%d %H:%M')"
+        
         git push
