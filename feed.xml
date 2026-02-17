@@ -4,14 +4,22 @@
     <title>J记财讯</title>
     <description>每日商业情报内参</description>
     <link>https://github.com/janicexu40-wq/My-Daily-AI-Report</link>
-    <lastBuildDate>Mon, 16 Feb 2026 22:57:28 GMT</lastBuildDate>
+    <lastBuildDate>Tue, 17 Feb 2026 22:59:31 GMT</lastBuildDate>
     <item>
+        <title>2026年02月18日 情报内参</title>
+        <description>J记财讯每日更新 · 星期三</description>
+        <pubDate>Tue, 17 Feb 2026 22:59:31 GMT</pubDate>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260218.mp3" type="audio/mpeg" length="100000"/>
+        <guid>20260218</guid>
+    </item>
+<item>
         <title>2026年02月17日 情报内参</title>
         <description>J记财讯每日更新 · 星期二</description>
         <pubDate>Mon, 16 Feb 2026 22:57:28 GMT</pubDate>
-        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260217.mp3" type="audio/mpeg" length="100000"/>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260217.mp3" type="audio/mpeg" length="100000" />
         <guid>20260217</guid>
     </item>
+
 <item>
         <title>2026年02月16日 情报内参</title>
         <description>J记财讯每日更新 · 星期一</description>
@@ -19,6 +27,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260216.mp3" type="audio/mpeg" length="100000" />
         <guid>20260216</guid>
     </item>
+
 
 </channel>
 </rss>
