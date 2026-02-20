@@ -4,14 +4,22 @@
     <title>J记财讯</title>
     <description>每日商业情报内参</description>
     <link>https://github.com/janicexu40-wq/My-Daily-AI-Report</link>
-    <lastBuildDate>Thu, 19 Feb 2026 23:01:25 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 20 Feb 2026 22:55:10 GMT</lastBuildDate>
     <item>
+        <title>2026年02月21日 情报内参</title>
+        <description>J记财讯每日更新 · 星期六</description>
+        <pubDate>Fri, 20 Feb 2026 22:55:10 GMT</pubDate>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260221.mp3" type="audio/mpeg" length="100000"/>
+        <guid>20260221</guid>
+    </item>
+<item>
         <title>2026年02月20日 情报内参</title>
         <description>J记财讯每日更新 · 星期五</description>
         <pubDate>Thu, 19 Feb 2026 23:01:25 GMT</pubDate>
-        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260220.mp3" type="audio/mpeg" length="100000"/>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260220.mp3" type="audio/mpeg" length="100000" />
         <guid>20260220</guid>
     </item>
+
 <item>
         <title>2026年02月19日 情报内参</title>
         <description>J记财讯每日更新 · 星期四</description>
@@ -20,6 +28,7 @@
         <guid>20260219</guid>
     </item>
 
+
 <item>
         <title>2026年02月18日 情报内参</title>
         <description>J记财讯每日更新 · 星期三</description>
@@ -27,6 +36,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260218.mp3" type="audio/mpeg" length="100000" />
         <guid>20260218</guid>
     </item>
+
 
 
 <item>
@@ -39,6 +49,7 @@
 
 
 
+
 <item>
         <title>2026年02月16日 情报内参</title>
         <description>J记财讯每日更新 · 星期一</description>
@@ -46,6 +57,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260216.mp3" type="audio/mpeg" length="100000" />
         <guid>20260216</guid>
     </item>
+
 
 
 
