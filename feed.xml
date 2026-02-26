@@ -4,14 +4,22 @@
     <title>J记财讯</title>
     <description>每日商业情报内参</description>
     <link>https://github.com/janicexu40-wq/My-Daily-AI-Report</link>
-    <lastBuildDate>Wed, 25 Feb 2026 23:04:24 GMT</lastBuildDate>
+    <lastBuildDate>Thu, 26 Feb 2026 23:01:24 GMT</lastBuildDate>
     <item>
+        <title>2026年02月27日 情报内参</title>
+        <description>J记财讯每日更新 · 星期五</description>
+        <pubDate>Thu, 26 Feb 2026 23:01:24 GMT</pubDate>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260227.mp3" type="audio/mpeg" length="100000"/>
+        <guid>20260227</guid>
+    </item>
+<item>
         <title>2026年02月26日 情报内参</title>
         <description>J记财讯每日更新 · 星期四</description>
         <pubDate>Wed, 25 Feb 2026 23:04:24 GMT</pubDate>
-        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260226.mp3" type="audio/mpeg" length="100000"/>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260226.mp3" type="audio/mpeg" length="100000" />
         <guid>20260226</guid>
     </item>
+
 <item>
         <title>2026年02月25日 情报内参</title>
         <description>J记财讯每日更新 · 星期三</description>
@@ -20,6 +28,7 @@
         <guid>20260225</guid>
     </item>
 
+
 <item>
         <title>2026年02月24日 情报内参</title>
         <description>J记财讯每日更新 · 星期二</description>
@@ -27,6 +36,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260224.mp3" type="audio/mpeg" length="100000" />
         <guid>20260224</guid>
     </item>
+
 
 
 <item>
@@ -39,6 +49,7 @@
 
 
 
+
 <item>
         <title>2026年02月22日 情报内参</title>
         <description>J记财讯每日更新 · 星期日</description>
@@ -46,6 +57,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260222.mp3" type="audio/mpeg" length="100000" />
         <guid>20260222</guid>
     </item>
+
 
 
 
@@ -62,6 +74,7 @@
 
 
 
+
 <item>
         <title>2026年02月20日 情报内参</title>
         <description>J记财讯每日更新 · 星期五</description>
@@ -69,6 +82,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260220.mp3" type="audio/mpeg" length="100000" />
         <guid>20260220</guid>
     </item>
+
 
 
 
@@ -89,6 +103,7 @@
 
 
 
+
 <item>
         <title>2026年02月18日 情报内参</title>
         <description>J记财讯每日更新 · 星期三</description>
@@ -96,6 +111,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260218.mp3" type="audio/mpeg" length="100000" />
         <guid>20260218</guid>
     </item>
+
 
 
 
@@ -120,6 +136,7 @@
 
 
 
+
 <item>
         <title>2026年02月16日 情报内参</title>
         <description>J记财讯每日更新 · 星期一</description>
@@ -127,6 +144,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260216.mp3" type="audio/mpeg" length="100000" />
         <guid>20260216</guid>
     </item>
+
 
 
 
