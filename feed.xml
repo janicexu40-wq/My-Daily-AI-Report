@@ -4,14 +4,22 @@
     <title>J记财讯</title>
     <description>每日商业情报内参</description>
     <link>https://github.com/janicexu40-wq/My-Daily-AI-Report</link>
-    <lastBuildDate>Tue, 03 Mar 2026 22:54:43 GMT</lastBuildDate>
+    <lastBuildDate>Wed, 04 Mar 2026 22:58:27 GMT</lastBuildDate>
     <item>
+        <title>2026年03月05日 情报内参</title>
+        <description>J记财讯每日更新 · 星期四</description>
+        <pubDate>Wed, 04 Mar 2026 22:58:27 GMT</pubDate>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260305.mp3" type="audio/mpeg" length="100000"/>
+        <guid>20260305</guid>
+    </item>
+<item>
         <title>2026年03月04日 情报内参</title>
         <description>J记财讯每日更新 · 星期三</description>
         <pubDate>Tue, 03 Mar 2026 22:54:43 GMT</pubDate>
-        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260304.mp3" type="audio/mpeg" length="100000"/>
+        <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260304.mp3" type="audio/mpeg" length="100000" />
         <guid>20260304</guid>
     </item>
+
 <item>
         <title>2026年03月03日 情报内参</title>
         <description>J记财讯每日更新 · 星期二</description>
@@ -20,6 +28,7 @@
         <guid>20260303</guid>
     </item>
 
+
 <item>
         <title>2026年03月02日 情报内参</title>
         <description>J记财讯每日更新 · 星期一</description>
@@ -27,6 +36,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260302.mp3" type="audio/mpeg" length="100000" />
         <guid>20260302</guid>
     </item>
+
 
 
 <item>
@@ -39,6 +49,7 @@
 
 
 
+
 <item>
         <title>2026年02月28日 情报内参</title>
         <description>J记财讯每日更新 · 星期六</description>
@@ -46,6 +57,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260228.mp3" type="audio/mpeg" length="100000" />
         <guid>20260228</guid>
     </item>
+
 
 
 
@@ -62,6 +74,7 @@
 
 
 
+
 <item>
         <title>2026年02月26日 情报内参</title>
         <description>J记财讯每日更新 · 星期四</description>
@@ -69,6 +82,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260226.mp3" type="audio/mpeg" length="100000" />
         <guid>20260226</guid>
     </item>
+
 
 
 
@@ -89,6 +103,7 @@
 
 
 
+
 <item>
         <title>2026年02月24日 情报内参</title>
         <description>J记财讯每日更新 · 星期二</description>
@@ -96,6 +111,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260224.mp3" type="audio/mpeg" length="100000" />
         <guid>20260224</guid>
     </item>
+
 
 
 
@@ -120,6 +136,7 @@
 
 
 
+
 <item>
         <title>2026年02月22日 情报内参</title>
         <description>J记财讯每日更新 · 星期日</description>
@@ -127,6 +144,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260222.mp3" type="audio/mpeg" length="100000" />
         <guid>20260222</guid>
     </item>
+
 
 
 
@@ -155,6 +173,7 @@
 
 
 
+
 <item>
         <title>2026年02月20日 情报内参</title>
         <description>J记财讯每日更新 · 星期五</description>
@@ -162,6 +181,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260220.mp3" type="audio/mpeg" length="100000" />
         <guid>20260220</guid>
     </item>
+
 
 
 
@@ -194,6 +214,7 @@
 
 
 
+
 <item>
         <title>2026年02月18日 情报内参</title>
         <description>J记财讯每日更新 · 星期三</description>
@@ -201,6 +222,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260218.mp3" type="audio/mpeg" length="100000" />
         <guid>20260218</guid>
     </item>
+
 
 
 
@@ -237,6 +259,7 @@
 
 
 
+
 <item>
         <title>2026年02月16日 情报内参</title>
         <description>J记财讯每日更新 · 星期一</description>
@@ -244,6 +267,7 @@
         <enclosure url="https://raw.githubusercontent.com/janicexu40-wq/My-Daily-AI-Report/main/output/briefing_20260216.mp3" type="audio/mpeg" length="100000" />
         <guid>20260216</guid>
     </item>
+
 
 
 
